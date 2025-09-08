@@ -727,7 +727,7 @@ ui <- fluidPage(
                                "Mean kJ" = "Mean kJ",
                                "% Total energy" = "Percent kJ",
                                "% Discretionary kJ" = "Disc energy"), 
-                   selected = "Percent consumed", multiple = FALSE), 
+                   selected = "Mean grams", multiple = FALSE), 
     ),
     
     conditionalPanel(
@@ -772,8 +772,10 @@ ui <- fluidPage(
       justified = FALSE,
       checkIcon = list(yes = icon("ok", lib = "glyphicon"))
     ),
-    helpText("Click the button below to deselect all age groups except 'Total'."),
+    # helpText("Click the button below to deselect all age groups except 'Total'."),
     actionButton("select_total", "Select only 'Total'", icon = icon("filter")),
+    actionButton("select_age_groups", "Select standard age groups", icon = icon("filter")),
+    
     
     checkboxInput("showDataLabels", "Show Data Labels", value = TRUE),
     checkboxInput("showErrorBars", "Show error bars", value = FALSE),
@@ -874,6 +876,16 @@ server <- function(input, output, session) {
       selected = "Total"
     )
   })
+  
+  # --- Observer function for 'Select only Total' button ---
+  observeEvent(input$select_age_groups, {
+    updateCheckboxGroupButtons(
+      session,
+      inputId = "Agegroup",
+      selected = c("02-04", "05-11", "12-17", "18-29", "30-49", "50-64", "65-74", "75+") 
+    )
+  })
+  
   
 # Filter dataframes according to inputs 
 Ausnut_tab_filtered <- reactive({
@@ -1476,54 +1488,19 @@ output$hcontainer <- renderHighchart({
     xvar <- rlang::sym(x_axis())
     gvar <- rlang::sym(groupby())
     
-    # Categories as character vector, preserve order from data
-    cats <- df %>%
-      dplyr::distinct(!!xvar) %>%
-      dplyr::pull() %>%
-      as.character()
-    
-    one_cat  <- length(cats) == 1
-    label_px <- if (one_cat) 420 else 220
-    
-    # Force Highcharts to render the FULL label (not first char) with a fixed width box
-    lab_fmt <- htmlwidgets::JS(sprintf(
-      "function () {
-     return '<span style=\"display:inline-block;width:%dpx;white-space:normal;\">' +
-            this.value + '</span>';
-   }",
-      label_px
-    ))
+    cats <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull() %>% as.character()
     
     hc <- build_base_chart(
-      series_type = "column",
-      x_title     = x_axis(),
-      y_title     = paste0(U()$unit),
-      title_text  = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
+      series_type  = "column",
+      x_title      = x_axis(),
+      y_title      = paste0(U()$unit),
+      title_text   = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
       value_suffix = U()$unit
     ) %>%
-      add_grouped_bars_with_errorbars(
-        df, xvar, gvar,
-        series_type    = "column",
-        categories     = cats,
-        show_errorbars = show_err
-      ) %>%
-      # Override axis to ensure labels render as full strings
-      highcharter::hc_xAxis(
-        type = "category",
-        categories = cats,
-        labels = list(
-          useHTML   = TRUE,
-          formatter = lab_fmt,
-          style     = list(textOverflow = "allow") # extra safety
-        ),
-        tickPositions = 0:(length(cats) - 1),   # explicit ticks
-        tickInterval  = 1
-      ) %>%
-      # Give room for multi-line labels (especially when only one category)
-      highcharter::hc_chart(
-        marginBottom = if (one_cat) 120 else 80
-      )
-    }
+      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
+                                      categories = cats, 
+                                      show_errorbars  = show_err)
+  }
   
   # CASE 4: AUSNUT, single age, multiple sexes -> vertical columns (dynamic)
   else if (input$choosetable == "AUSNUT" &&
