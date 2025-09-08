@@ -1477,12 +1477,13 @@ output$hcontainer <- renderHighchart({
       add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
                                       categories = cats, 
                                       show_errorbars  = show_err)
+    print("Case 2")
   }
   
   # CASE 3: AUSNUT, general columns (dynamic x & group)
   else if (input$choosetable == "AUSNUT" &&
-           length(age_vals) >= 1 &&
-           (length(maj_vals) <= 4 || length(min_vals) <= 4)) {
+           length(age_vals) > 1 &&
+           ((length(maj_vals) >=1 && length(maj_vals) <= 4) || (length(min_vals)>=1 && length(min_vals) <= 4))) {
     
     df   <- Ausnut_tab_filtered()
     xvar <- rlang::sym(x_axis())
@@ -1500,7 +1501,33 @@ output$hcontainer <- renderHighchart({
       add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
                                       categories = cats, 
                                       show_errorbars  = show_err)
+    print("Case 3")
+    }
+  
+  # CASE 3.1: AUSNUT, general columns (dynamic x & group)
+  else if (input$choosetable == "AUSNUT" &&
+           length(age_vals) <= 1 &&
+           (length(maj_vals) <=1 || length(min_vals) <=1 )) {
+    
+    df   <- Ausnut_tab_filtered()
+    xvar <- rlang::sym(x_axis())
+    gvar <- rlang::sym(groupby())
+    
+    cats <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull() %>% as.character()
+    
+    hc <- build_base_chart(
+      series_type  = "column",
+      x_title      = paste0(Label()),
+      y_title      = paste0(U()$unit),
+      title_text   = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
+      value_suffix = U()$unit
+    ) %>%
+      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
+                                      categories = cats, 
+                                      show_errorbars  = show_err)
+    print("Case 3.1")
   }
+  
   
   # CASE 4: AUSNUT, single age, multiple sexes -> vertical columns (dynamic)
   else if (input$choosetable == "AUSNUT" &&
@@ -1523,6 +1550,7 @@ output$hcontainer <- renderHighchart({
       add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column", 
                                       categories = cats, 
                                       show_errorbars  = show_err)
+    print("Case 4")
   }
   
   # CASE 5: Nutrients table
