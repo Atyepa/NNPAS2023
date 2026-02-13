@@ -6,50 +6,26 @@ library(shinydashboard)
 library(shinyWidgets)
 library(shinythemes)
 library(readxl)
-
 options(warn=-1)
 
-`%!in%` <- negate(`%in%`)
+# Source the custom styles function
+source("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/custom_styles.R")
 
-#---Data directory:
-setwd("C:/Users/atyeo/OneDrive/R data/NNPAS2023")
+# Source the cleaning functions
+source("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/cleaning_fun.R")
 
 # Data cube path:
 dcpath <- "https://www.abs.gov.au/statistics/health/food-and-nutrition/national-nutrition-and-physical-activity-survey/2023"
 
-#---------------------
-# Cleaning functions:
-#---------------------
-# Function to remove footnotes such as (a) from labels:
-strip_brace <- function(df, column_name) {
-  column_sym <- sym(column_name)
-  df %>%
-    mutate(
-      !!column_sym := str_remove_all(
-        !!column_sym,
-        "\\s*\\([A-Za-z]\\)|\\s*\\[[A-Za-z]\\]"
-      ) %>%
-        str_trim()
-    )
-}
-
-# Function to clean text from numeric columns:
-force_numeric <- function(df, target_cols) {
-  df %>%
-    mutate(across(all_of(target_cols), ~ {
-      suppressWarnings(as.numeric(ifelse(. %in% c("n.p", "-", "—", "np"), NA, .)))
-    }))
-}
-
 # Template to organise AUSNUT tables
-AUSNUT_class <- read_excel("./AUSNUT23_class.xlsx", sheet = 1) 
-
+AUSNUT_class <- read_xlsx_from_url("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/AUSNUT23_class.xlsx")
+  
 # Template to organise Nutrient tables
-Nut_class <- read_excel("./NUT23_class.xlsx", sheet = 1) %>% 
+Nut_class <- read_xlsx_from_url("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/NUT23_class.xlsx")%>% 
   strip_brace("Nutrient")
 
 # Template to organise Macronutrient tables
-Macro_class <- read_excel("./Macro23_class.xlsx", sheet = 1) %>% 
+Macro_class <- read_xlsx_from_url("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/Macro23_class.xlsx") %>% 
   strip_brace("Macro")
 
 # Define age cols
@@ -60,13 +36,6 @@ age_cols <- c("02-04", "05-11", "12-17", "18-29", "30-49",
 #---- Read in Excel datacube and do pre-processing 
 #-------------------------------------------------
 
-# Function for reading in from dcpath:
-read_dc_excel <- function(dcpath, filename, sheet, range) {
-  url <- paste0(dcpath, "/", filename)
-  temp_file <- tempfile(fileext = ".xlsx")
-  download.file(url, destfile = temp_file, mode = "wb")
-  readxl::read_excel(temp_file, sheet = sheet, range = range)
-}
 
 #-------------------------
 #  Table 1 Mean nutrients:
@@ -578,8 +547,6 @@ Table7 <- process_AUSNUT_table7(
   ausnut_df  = AUSNUT_class    # uses your master lookup
 )
 
-
-
 #-------------------------------------
 #----Bind common tables ----:
 #-------------------------------------
@@ -664,14 +631,6 @@ Macro <- as.list(as.character(Macro$Macronutrient))
   distinct() 
 
 `Age group` <- as.list(`Age group`$`Age group`)
-
-#--- Colours---
-abscol <- c("#4FADE7", 	"#1A4472", 	"#F29000", 	"#993366", 	"#669966", 	"#99CC66",
-            "#CC9966", 	"#666666", 	"#8DD3C7", 	"#BEBADA", 	"#FB8072", 	"#80B1D3",
-            "#FDB462", 	"#B3DE69", 	"#FCCDE5", 	"#D9D9D9", 	"#BC80BD", 	"#CCEBC5", 	"#ffcc99")
-
-# Source the custom styles function
-source("./custom_styles.R")
 
 #---Today's date 
 now <- format(today(),"%d %B %Y")
@@ -1477,7 +1436,7 @@ output$hcontainer <- renderHighchart({
       add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
                                       categories = cats, 
                                       show_errorbars  = show_err)
-    print("Case 2")
+   
   }
   
   # CASE 3: AUSNUT, general columns (dynamic x & group)
@@ -1501,32 +1460,32 @@ output$hcontainer <- renderHighchart({
       add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
                                       categories = cats, 
                                       show_errorbars  = show_err)
-    print("Case 3")
+   
     }
+  
   
   # CASE 3.1: AUSNUT, general columns (dynamic x & group)
   else if (input$choosetable == "AUSNUT" &&
            length(age_vals) <= 1 &&
            (length(maj_vals) <=1 || length(min_vals) <=1 )) {
     
-    df   <- Ausnut_tab_filtered()
-    xvar <- rlang::sym(x_axis())
-    gvar <- rlang::sym(groupby())
+    df <- Ausnut_tab_filtered()
     
-    cats <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull() %>% as.character()
+    hc <- df %>% 
+      hchart(.,
+             type = "column",
+             hcaes(x = !!sym(x_axis()), 
+                   y = val,
+                   group = !!sym(groupby()))) %>%
+      hc_xAxis(title = list(text = paste0(x_axis()))) %>%
+      hc_yAxis(title = list(text = paste0(U()$unit))) %>%
+      hc_title(text = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023")) %>% 
+      hc_add_theme(hc_theme_economist()) %>% 
+      hc_colors(abscol) %>% 
+      hc_tooltip(crosshairs = TRUE, valueSuffix = paste0(" ",U()$unit)) %>% 
+      apply_font_styles(input$showDataLabels)
     
-    hc <- build_base_chart(
-      series_type  = "column",
-      x_title      = paste0(Label()),
-      y_title      = paste0(U()$unit),
-      title_text   = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
-      value_suffix = U()$unit
-    ) %>%
-      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
-                                      categories = cats, 
-                                      show_errorbars  = show_err)
-    print("Case 3.1")
-  }
+    }
   
   
   # CASE 4: AUSNUT, single age, multiple sexes -> vertical columns (dynamic)
@@ -1550,7 +1509,7 @@ output$hcontainer <- renderHighchart({
       add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column", 
                                       categories = cats, 
                                       show_errorbars  = show_err)
-    print("Case 4")
+   
   }
   
   # CASE 5: Nutrients table
