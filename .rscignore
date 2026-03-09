@@ -1,0 +1,16 @@
+# Development / backup files
+.claude/
+.Rhistory
+.Rdata
+
+# Old and backup scripts
+NNPAS data vis.R
+NNPAS data visCI_original.R
+cleaning_fun_local.R
+old_custom_styles.R
+
+# Deployment metadata
+rsconnect/
+
+# Documentation (not needed at runtime)
+README.md
