@@ -1304,13 +1304,17 @@ output$hcontainer <- renderHighchart({
     # (Age group, Beverage) cell has one row per year — they'd overlap using
     # the normal groupby. Fix: create a compound "Beverage (Year)" series so
     # every (x-category, series) combination has exactly one row.
+    # Series ordered Bev1 2011-12, Bev1 2023, Bev2 2011-12, Bev2 2023 so
+    # same-beverage bars are adjacent for easy year comparison.
     if (bev_vals_n > 1 && year_vals_n > 1) {
+      bev_order  <- unique(as.character(df$Beverage))
+      yr_order   <- c("2011-12", "2023")[c("2011-12", "2023") %in% unique(as.character(df$Year))]
+      cmp_levels <- as.vector(t(outer(bev_order, yr_order, function(b, y) paste0(b, " (", y, ")"))))
       df <- df %>%
-        dplyr::mutate(`Beverage (Year)` = paste0(Beverage, " (", Year, ")"),
-                      `Beverage (Year)` = factor(`Beverage (Year)`,
-                                                 levels = unique(paste0(Beverage, " (", Year, ")"))))
-      x_col   <- "Age group"
-      grp_col <- "Beverage (Year)"
+        dplyr::mutate(`Beverage (Year)` = factor(paste0(Beverage, " (", Year, ")"),
+                                                 levels = cmp_levels))
+      x_col   <- if (is_swapped) "Beverage (Year)" else "Age group"
+      grp_col <- if (is_swapped) "Age group"        else "Beverage (Year)"
     } else {
       x_col   <- if (is_swapped) groupby_bev() else x_axis_bev()
       grp_col <- if (is_swapped) x_axis_bev()  else groupby_bev()
