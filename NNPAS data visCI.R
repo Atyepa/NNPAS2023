@@ -1324,7 +1324,7 @@ output$hcontainer <- renderHighchart({
     if (bev_vals_n > 1 && year_vals_n > 1 && length(input$Sex) == 1) {
       bev_order  <- unique(as.character(df$Beverage))
       yr_order   <- c("2011-12", "2023")[c("2011-12", "2023") %in% unique(as.character(df$Year))]
-      cmp_levels <- as.vector(t(outer(bev_order, yr_order, function(b, y) paste0(b, " (", y, ")"))))
+      cmp_levels <- as.vector(outer(yr_order, bev_order, function(y, b) paste0(b, " (", y, ")")))
       df <- df %>%
         dplyr::mutate(`Beverage (Year)` = factor(paste0(Beverage, " (", Year, ")"),
                                                  levels = cmp_levels))
