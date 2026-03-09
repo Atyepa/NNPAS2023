@@ -7,6 +7,7 @@ library(shinyWidgets)
 library(shinythemes)
 library(readxl)
 options(warn=-1)
+options(shiny.launch.browser = TRUE)
 
 # Source the custom styles function
 source("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/custom_styles.R")
@@ -87,11 +88,11 @@ val_data <- purrr::map2(sheet_nums[c(1, 2, 3)], sexes, ~
     left_join(select(rse_data, Sex, Nutrient, `Age group`, RSE),
               by = c("Sex", "Nutrient", "Age group")) %>%
     mutate(
-      lowerCI = round(val - (1.96 * RSE / 100), 1),
-      upperCI = round(val + (1.96 * RSE / 100), 1)
+      lowerCI = round(val - (1.96 * RSE / 100 * val), 1),
+      upperCI = round(val + (1.96 * RSE / 100 * val), 1)
     ) %>%
     select(-RSE)
-  
+
   return(final_table)
 }
 
@@ -182,11 +183,11 @@ process_macronutrient_table <- function(dcpath, filename, sheet_nums, col_names,
   final_table <- val_data %>%
     left_join(rse_data, by = c("Sex", "Macronutrient", "Age group")) %>%
     mutate(
-      lowerCI = round(val - (1.96 * RSE / 100), 1),
-      upperCI = round(val + (1.96 * RSE / 100), 1)
+      lowerCI = round(val - (1.96 * RSE / 100 * val), 1),
+      upperCI = round(val + (1.96 * RSE / 100 * val), 1)
     ) %>%
     select(-RSE)
-  
+
   return(final_table)
 }
 
@@ -262,8 +263,8 @@ process_nutrient_table3 <- function(dcpath, filename, sheet_nums, est_names, rse
   final_table <- est_data %>%
     left_join(rse_data, by = c("Sex", "Nutrient", "Age group")) %>%
     mutate(
-      lowerCI = round(val - (1.96 * RSE / 100), 1),
-      upperCI = round(val + (1.96 * RSE / 100), 1)
+      lowerCI = round(val - (1.96 * RSE  * val / 100), 1),
+      upperCI = round(val + (1.96 * RSE * val / 100), 1)
     ) %>%
     select(-RSE)
   
@@ -364,8 +365,8 @@ process_AUSNUT_tables <- function(filename, sheet_nums, names_vec, ausnut_df, ty
   # Combine and calculate confidence intervals
   final_table <- main_data %>%
     left_join(rse_data, by = c("Sex", "full_code", "Age group")) %>%
-    mutate(lowerCI = round(val - (1.96 * RSE / 100), 1),
-           upperCI = round(val + (1.96 * RSE / 100), 1)) %>%
+    mutate(lowerCI = round(val - (1.96 * RSE / 100 * val), 1),
+           upperCI = round(val + (1.96 * RSE / 100 * val), 1)) %>%
     select(-RSE)
   
   return(final_table)
@@ -646,37 +647,44 @@ ui <- fluidPage(
   headerPanel("NNPAS 2023 Data cube visualisation"),
   
   sidebarPanel(
-    radioButtons("choosetable", "Select table:",
+    shinyWidgets::pickerInput("choosetable", "Select table:",
                  choices = c("AUSNUT foodgroups" = "AUSNUT",
                              "Nutrients" = "Nutrients",
                              "Macronutrient kJ" = "Macro"),
-                 selected = "AUSNUT", inline = FALSE),
-    
+                 selected = "AUSNUT", 
+                 multiple = FALSE, options = list(`actions-box` = TRUE), width = "300px"),
+
     conditionalPanel(
       condition = "input.choosetable == 'AUSNUT'",
       
-      radioButtons("Class1", "Classification level:", 
+      shinyWidgets::pickerInput("Class1", "Classification level:", 
                    choices = c("Major", "Sub-major", "Sub-major within Major" = "MajMin"), 
-                   selected = "Major", inline = TRUE),
+                   selected = "Major", 
+                   multiple = FALSE,
+          options  = list(`actions-box` = TRUE), width = "300px"
+      ),
       
       conditionalPanel(
         condition = "input.Class1 == 'Major'",
         pickerInput("Majgrp1", "AUSNUT major food groups:", choices = Two_dig, 
                     selected = "01, Non-alcoholic beverages", multiple = TRUE, 
-                    options = list(`actions-box` = TRUE))
+                    options = list(`actions-box` = TRUE), width = "300px")
       ),
       
       conditionalPanel(
         condition = "input.Class1 == 'Sub-major'",
         pickerInput("Mingrp1", "AUSNUT sub-major food groups:", choices = Thr_dig,
                     selected = "0101, Tea", multiple = TRUE, 
-                    options = list(`actions-box` = TRUE))
+                    options = list(`actions-box` = TRUE), width = "300px")
       ),
       
       conditionalPanel(
-        condition = "input.Class1 == 'MajMin'", 
+        condition = "input.Class1 == 'MajMin'",
         pickerInput("MajMin", "Components of major food groups:", choices = Two_dig,
-                    multiple = TRUE, options = list(`actions-box` = TRUE))
+                    selected = "01, Non-alcoholic beverages",
+                    multiple = TRUE, options = list(`actions-box` = TRUE), width = "300px"),
+        pickerInput("MajMin_sub", "Sub-major foods within selection:", choices = NULL,
+                    multiple = TRUE, options = list(`actions-box` = TRUE), width = "300px")
       ),
       
       selectInput("A_Nutrient", "Estimate:", 
@@ -686,7 +694,9 @@ ui <- fluidPage(
                                "Mean kJ" = "Mean kJ",
                                "% Total energy" = "Percent kJ",
                                "% Discretionary kJ" = "Disc energy"), 
-                   selected = "Mean grams", multiple = FALSE), 
+                  selected = "Mean grams", multiple = FALSE,
+                  width = "180px"),
+      checkboxInput("AUSNstack", "Stack bars", value = FALSE),
     ),
     
     conditionalPanel(
@@ -701,7 +711,7 @@ ui <- fluidPage(
       pickerInput("Nutrient", "Select nutrients:",
                   choices = Nutrient,
                   selected = "Energy", multiple = FALSE, 
-                  options = list(`actions-box` = TRUE))
+                  options = list(`actions-box` = TRUE), width = "300px")
     ),
     
     conditionalPanel(
@@ -713,7 +723,8 @@ ui <- fluidPage(
       pickerInput("MacrokJ", "Select macronutrients:",
                   choices = Macro,
                   selected = c("Protein", "Total fat", "Carbohydrate", "Dietary fibre", "Alcohol"),
-                  multiple = TRUE, options = list(`actions-box` = TRUE))
+                  multiple = TRUE, options = list(`actions-box` = TRUE), width = "300px"),
+      checkboxInput("Macrostack", "Stack bars", value = TRUE),
     ),
     
     checkboxGroupInput("Sex", "Sex:", 
@@ -738,6 +749,55 @@ ui <- fluidPage(
     
     checkboxInput("showDataLabels", "Show Data Labels", value = TRUE),
     checkboxInput("showErrorBars", "Show error bars", value = FALSE),
+
+    tags$div(
+      style = "margin-top: 8px;",
+      tags$button(
+        id = "swap_group",
+        type = "button",
+        class = "btn btn-default btn-sm",
+        style = "width: 300px;",
+        "Swap x-axis / series group"
+      ),
+      tags$script(HTML("
+(function() {
+  var swapped = false;
+  var btn = document.getElementById('swap_group');
+  function sendVal() {
+    if (window.Shiny && Shiny.setInputValue) {
+      Shiny.setInputValue('swap_group', swapped ? 'swapped' : 'normal', { priority: 'event' });
+    }
+  }
+  function updateAppearance() {
+    if (!btn) return;
+    if (swapped) {
+      btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
+      btn.style.fontWeight = 'bold';
+    } else {
+      btn.classList.remove('active');
+      btn.setAttribute('aria-pressed', 'false');
+      btn.style.fontWeight = '';
+    }
+  }
+  document.addEventListener('shiny:connected', function() {
+    sendVal();
+    updateAppearance();
+  });
+  if (document.readyState !== 'loading' && window.Shiny && Shiny.shinyapp) {
+    sendVal();
+    updateAppearance();
+  }
+  if (btn) {
+    btn.addEventListener('click', function() {
+      swapped = !swapped;
+      sendVal();
+      updateAppearance();
+    });
+  }
+})();
+"))
+    ),
   ),
   
   mainPanel(
@@ -783,6 +843,10 @@ server <- function(input, output, session) {
             style = list(fontSize = '14px')
           ),
           marker = list(enabled = FALSE)
+        )) %>%
+      hc_plotOptions(
+        errorbar = list(
+          dataLabels = list(enabled = FALSE)
         ))
   }
   
@@ -827,6 +891,18 @@ server <- function(input, output, session) {
     }
   }
   
+  # --- Observer: populate sub-major picker when MajMin major group selection changes ---
+  observeEvent(input$MajMin, {
+    sub_choices <- AUSNUT_tab %>%
+      dplyr::filter(Class_level == "MajMin", submajCode %in% input$MajMin) %>%
+      dplyr::distinct(Label) %>%
+      dplyr::arrange(Label) %>%
+      dplyr::pull(Label)
+    updatePickerInput(session, "MajMin_sub",
+                      choices  = sub_choices,
+                      selected = sub_choices)
+  }, ignoreNULL = FALSE)
+
   # --- Observer function for 'Select only Total' button ---
   observeEvent(input$select_total, {
     updateCheckboxGroupButtons(
@@ -848,14 +924,21 @@ server <- function(input, output, session) {
   
 # Filter dataframes according to inputs 
 Ausnut_tab_filtered <- reactive({
+                      a_nutrient <- input$A_Nutrient
+                      majgrp1    <- input$Majgrp1
+                      mingrp1    <- input$Mingrp1
+                      majmin     <- input$MajMin
+                      majmin_sub <- input$MajMin_sub
                       AUSNUT_tab %>%
                       mutate(Sex = factor(Sex, levels = c("Males", "Females", "Persons"))) %>%
-                      arrange(Sex, `Age group`) %>% 
+                      arrange(Sex, `Age group`) %>%
                       filter(Sex %in% Sex()$Sex) %>%
-                      filter(`Age group` %in% Agegroup()$Agegroup) %>% 
-                      filter(Type == input$A_Nutrient) %>% 
+                      filter(`Age group` %in% Agegroup()$Agegroup) %>%
+                      filter(Type == a_nutrient) %>%
                       filter(Class_level %in% Class1()$Class1) %>%
-                      filter(cLabel %in% input$Majgrp1 | cLabel %in% input$Mingrp1 | submajCode %in% input$MajMin)
+                      filter(cLabel %in% majgrp1 | cLabel %in% mingrp1 |
+                               (submajCode %in% majmin &
+                                  (length(majmin_sub) == 0 | Label %in% majmin_sub)))
                   })
                  
 #  Units lookup - Ausnut table  
@@ -936,20 +1019,71 @@ Um <- reactive({
 
 # Output tables
 #--- Set up table objects for DT and Excel from df---  
-dt_Ausn <- reactive({ Ausnut_tab_filtered() %>% 
-    select(Class_level, Label, val, Unit, Sex, `Age group`) %>% 
-    distinct() %>% 
-    pivot_wider(1:4, names_from = `Age group`, values_from = val)})
+dt_Ausn <- reactive({
+  show_ci <- isTruthy(input$showErrorBars)
+  df <- Ausnut_tab_filtered() %>%
+    select(Class_level, Label, val, lowerCI, upperCI, Unit, Sex, `Age group`) %>%
+    distinct()
+  wide_val <- df %>% select(-lowerCI, -upperCI) %>%
+    pivot_wider(names_from = `Age group`, values_from = val) %>%
+    mutate(.row_type = 1L)
+  if (show_ci) {
+    wide_ci <- df %>%
+      mutate(val = round((upperCI - lowerCI) / 2, 1), Unit = "95% CI (+/-)") %>%
+      select(-lowerCI, -upperCI) %>%
+      pivot_wider(names_from = `Age group`, values_from = val) %>%
+      mutate(.row_type = 2L)
+    bind_rows(wide_val, wide_ci) %>%
+      arrange(Class_level, Label, Sex, .row_type) %>%
+      select(-.row_type)
+  } else {
+    select(wide_val, -.row_type)
+  }
+})
 
-dt_Nut <-  reactive({ Nutrient_tab_filtered() %>% 
-    select(Nutrient, Unit, Sex, Year, `Age group`, val) %>% 
-    distinct() %>% 
-    pivot_wider(1:4, names_from = `Age group`, values_from = val)})
+dt_Nut <- reactive({
+  show_ci <- isTruthy(input$showErrorBars)
+  df <- Nutrient_tab_filtered() %>%
+    select(Nutrient, Unit, Sex, Year, `Age group`, val, lowerCI, upperCI) %>%
+    distinct()
+  wide_val <- df %>% select(-lowerCI, -upperCI) %>%
+    pivot_wider(1:4, names_from = `Age group`, values_from = val) %>%
+    mutate(.row_type = 1L)
+  if (show_ci) {
+    wide_ci <- df %>%
+      mutate(val = round((upperCI - lowerCI) / 2, 1), Unit = "95% CI (+/-)") %>%
+      select(-lowerCI, -upperCI) %>%
+      pivot_wider(1:4, names_from = `Age group`, values_from = val) %>%
+      mutate(.row_type = 2L)
+    bind_rows(wide_val, wide_ci) %>%
+      arrange(Nutrient, Sex, Year, .row_type) %>%
+      select(-.row_type)
+  } else {
+    select(wide_val, -.row_type)
+  }
+})
 
-dt_Macro <- reactive({ Macro_tab_filtered() %>% 
-    select(Macronutrient, Unit, Sex, Year, `Age group`, val) %>% 
-    distinct() %>% 
-    pivot_wider(1:4, names_from = `Age group`, values_from = val)})
+dt_Macro <- reactive({
+  show_ci <- isTruthy(input$showErrorBars)
+  df <- Macro_tab_filtered() %>%
+    select(Macronutrient, Unit, Sex, Year, `Age group`, val, lowerCI, upperCI) %>%
+    distinct()
+  wide_val <- df %>% select(-lowerCI, -upperCI) %>%
+    pivot_wider(1:4, names_from = `Age group`, values_from = val) %>%
+    mutate(.row_type = 1L)
+  if (show_ci) {
+    wide_ci <- df %>%
+      mutate(val = round((upperCI - lowerCI) / 2, 1), Unit = "95% CI (+/-)") %>%
+      select(-lowerCI, -upperCI) %>%
+      pivot_wider(1:4, names_from = `Age group`, values_from = val) %>%
+      mutate(.row_type = 2L)
+    bind_rows(wide_val, wide_ci) %>%
+      arrange(Macronutrient, Sex, Year, .row_type) %>%
+      select(-.row_type)
+  } else {
+    select(wide_val, -.row_type)
+  }
+})
   
 
 # Table for DT display
@@ -1228,8 +1362,13 @@ output$hcontainer <- renderHighchart({
   min_vals    <- input$Mingrp1
   majmin_vals <- input$MajMin
   
-  show_err <- isTruthy(input$showErrorBars)
-  
+  show_err    <- isTruthy(input$showErrorBars)
+  is_swapped  <- isTRUE(input$swap_group == "swapped")
+  ausn_stack  <- isTRUE(input$AUSNstack)
+  macro_stack <- isTRUE(input$Macrostack)
+  ausn_show_err  <- show_err && !ausn_stack
+  macro_show_err <- show_err && !macro_stack
+
   # ---------- helpers ----------
   build_base_chart <- function(series_type = c("column","bar"),
                                x_title, y_title, title_text, value_suffix) {
@@ -1283,7 +1422,7 @@ output$hcontainer <- renderHighchart({
         )
       
       bar_data <- dfgp %>%
-        dplyr::transmute(x = x, y = val) %>%
+        dplyr::transmute(x = x, y = val, name = .cat) %>%
         highcharter::list_parse2()
       
       hc <- hc %>%
@@ -1301,7 +1440,7 @@ output$hcontainer <- renderHighchart({
           dplyr::filter(!is.na(lowerCI), !is.na(upperCI)) %>%
           dplyr::transmute(x = x, low = lowerCI, high = upperCI) %>%
           highcharter::list_parse2()
-        
+
         hc <- hc %>%
           hc_add_series(
             type         = "errorbar",
@@ -1315,61 +1454,72 @@ output$hcontainer <- renderHighchart({
           )
       }
     }
+    hc <- hc %>%
+      hc_tooltip(headerFormat = '<span style="font-size: 10px">{point.name}</span><br/>')
     hc
   }
   
-  # Special case of stacked column:
+  # Special case of stacked column (or bar):
   add_stacked_columns_with_errorbars <- function(
     hc, df, xvar, gvar,
     categories = NULL,
     group_padding = 0.2,
     point_padding = 0.1,
-    show_errorbars = TRUE
+    show_errorbars = TRUE,
+    series_type = "column"
   ) {
     if (is.null(categories)) {
       categories <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull()
     }
-    
+
+    stack_opts <- list(stacking = "normal",
+                       groupPadding = group_padding,
+                       pointPadding = point_padding)
+    err_opts   <- list(pointRange   = 1 - 2 * group_padding,
+                       pointPadding = point_padding)
+
     hc <- hc %>%
       hc_xAxis(categories = categories) %>%
       hc_plotOptions(
-        column   = list(stacking = "normal",
-                        groupPadding = group_padding,
-                        pointPadding = point_padding),
-        errorbar = list(pointRange   = 1 - 2 * group_padding,  # match inner band
-                        pointPadding = point_padding)
+        column   = stack_opts,
+        bar      = stack_opts,
+        errorbar = err_opts
       )
-    
+
     groups <- df %>% dplyr::distinct(!!gvar) %>% dplyr::pull()
-    
+    # Cumulative y-base per category so error bars sit at the segment top
+    cum_base <- setNames(rep(0, length(categories)), as.character(categories))
+
     for (g in groups) {
       dfg <- df %>% dplyr::filter(!!gvar == g)
-      
+
       # values aligned to categories (NULL where missing)
       yvec <- lapply(categories, function(cat) {
         row <- dfg %>% dplyr::filter(!!xvar == cat)
         if (nrow(row) == 1) row$val[[1]] else NULL
       })
-      
+
       hc <- hc %>%
         hc_add_series(
           name = as.character(g),
-          type = "column",
+          type = series_type,
           data = yvec
           # stacking comes from plotOptions
         )
-      
+
       if (isTRUE(show_errorbars)) {
         err <- lapply(categories, function(cat) {
-          row <- dfg %>% dplyr::filter(!!xvar == cat)
+          row  <- dfg %>% dplyr::filter(!!xvar == cat)
+          base <- cum_base[[as.character(cat)]]
           if (nrow(row) == 1 &&
               !is.na(row$lowerCI[[1]]) && !is.na(row$upperCI[[1]])) {
-            list(row$lowerCI[[1]], row$upperCI[[1]])
+            list(low  = row$lowerCI[[1]] + base,
+                 high = row$upperCI[[1]] + base)
           } else {
             NULL
           }
         })
-        
+
         hc <- hc %>%
           hc_add_series(
             type         = "errorbar",
@@ -1379,6 +1529,14 @@ output$hcontainer <- renderHighchart({
             zIndex       = 6,
             tooltip      = list(pointFormat = "95% CI: {point.low}–{point.high}")
           )
+      }
+
+      # Advance cumulative base by this group's values
+      for (cat in as.character(categories)) {
+        row <- dfg %>% dplyr::filter(!!xvar == cat)
+        if (nrow(row) == 1 && !is.na(row$val[[1]])) {
+          cum_base[[cat]] <- cum_base[[cat]] + row$val[[1]]
+        }
       }
     }
     hc
@@ -1397,21 +1555,27 @@ output$hcontainer <- renderHighchart({
       group_by(!!sym(groupby())) %>%
       arrange(desc(val), .by_group = TRUE) %>%
       ungroup()
-    
-    xvar <- rlang::sym(x_axis())
-    gvar <- rlang::sym(groupby())
+
+    x_col   <- if (is_swapped && !ausn_stack) groupby() else x_axis()
+    grp_col <- if (is_swapped && !ausn_stack) x_axis() else groupby()
+    xvar <- rlang::sym(x_col)
+    gvar <- rlang::sym(grp_col)
     cats <- df %>% distinct(!!xvar) %>% pull()
-    
-    hc <- build_base_chart(
-      series_type = "bar",
-      x_title     = x_axis(),
-      y_title     = paste0(U()$unit),
-      title_text  = paste0(input$A_Nutrient, ", selected foods, 2023"),
+
+    hc_base <- build_base_chart(
+      series_type  = "bar",
+      x_title      = x_col,
+      y_title      = paste0(U()$unit),
+      title_text   = paste0(input$A_Nutrient, ", selected foods, 2023"),
       value_suffix = U()$unit
-    ) %>%
-      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "bar", 
-                                      categories = cats, 
-                                      show_errorbars  = show_err)
+    )
+    hc <- if (ausn_stack)
+      add_stacked_columns_with_errorbars(hc_base, df, xvar, gvar,
+                                         categories = cats,
+                                         show_errorbars = ausn_show_err, series_type = "bar")
+    else
+      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "bar",
+                                      categories = cats, show_errorbars = ausn_show_err)
   }
   
   # CASE 2: AUSNUT, >1 age, 1 sex, small selection -> vertical columns (x = Age group, group = Label)
@@ -1422,69 +1586,79 @@ output$hcontainer <- renderHighchart({
             (length(min_vals) >= 2 && length(min_vals) <= 4))) {
     
     df <- Ausnut_tab_filtered()
-    xvar <- rlang::sym("Age group")
-    gvar <- rlang::sym("Label")
+    x_col   <- if (is_swapped && !ausn_stack) "Label" else "Age group"
+    grp_col <- if (is_swapped && !ausn_stack) "Age group" else "Label"
+    xvar <- rlang::sym(x_col)
+    gvar <- rlang::sym(grp_col)
     cats <- df %>% distinct(!!xvar) %>% pull()
-    
-    hc <- build_base_chart(
-      series_type = "column",
-      x_title     = x_axis(),
-      y_title     = paste0(U()$unit),
-      title_text  = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
+
+    hc_base <- build_base_chart(
+      series_type  = "column",
+      x_title      = x_col,
+      y_title      = paste0(U()$unit),
+      title_text   = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
       value_suffix = U()$unit
-    ) %>%
-      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
-                                      categories = cats, 
-                                      show_errorbars  = show_err)
-   
+    )
+    hc <- if (ausn_stack)
+      add_stacked_columns_with_errorbars(hc_base, df, xvar, gvar,
+                                         categories = cats, show_errorbars = ausn_show_err)
+    else
+      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "column",
+                                      categories = cats, show_errorbars = ausn_show_err)
   }
-  
+
   # CASE 3: AUSNUT, general columns (dynamic x & group)
   else if (input$choosetable == "AUSNUT" &&
            length(age_vals) > 1 &&
            ((length(maj_vals) >=1 && length(maj_vals) <= 4) || (length(min_vals)>=1 && length(min_vals) <= 4))) {
     
     df   <- Ausnut_tab_filtered()
-    xvar <- rlang::sym(x_axis())
-    gvar <- rlang::sym(groupby())
-    
+    x_col   <- if (is_swapped && !ausn_stack) groupby() else x_axis()
+    grp_col <- if (is_swapped && !ausn_stack) x_axis() else groupby()
+    xvar <- rlang::sym(x_col)
+    gvar <- rlang::sym(grp_col)
     cats <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull() %>% as.character()
-    
-    hc <- build_base_chart(
+
+    hc_base <- build_base_chart(
       series_type  = "column",
-      x_title      = x_axis(),
+      x_title      = x_col,
       y_title      = paste0(U()$unit),
       title_text   = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
       value_suffix = U()$unit
-    ) %>%
-      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
-                                      categories = cats, 
-                                      show_errorbars  = show_err)
-   
+    )
+    hc <- if (ausn_stack)
+      add_stacked_columns_with_errorbars(hc_base, df, xvar, gvar,
+                                         categories = cats, show_errorbars = ausn_show_err)
+    else
+      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "column",
+                                      categories = cats, show_errorbars = ausn_show_err)
     }
-  
-  
+
+
   # CASE 3.1: AUSNUT, general columns (dynamic x & group)
   else if (input$choosetable == "AUSNUT" &&
            length(age_vals) <= 1 &&
            (length(maj_vals) <=1 || length(min_vals) <=1 )) {
     
     df <- Ausnut_tab_filtered()
-    
-    hc <- df %>% 
+    x_col   <- if (is_swapped && !ausn_stack) groupby() else x_axis()
+    grp_col <- if (is_swapped && !ausn_stack) x_axis() else groupby()
+
+    hc <- df %>%
       hchart(.,
              type = "column",
-             hcaes(x = !!sym(x_axis()), 
+             hcaes(x = !!sym(x_col),
                    y = val,
-                   group = !!sym(groupby()))) %>%
-      hc_xAxis(title = list(text = paste0(x_axis()))) %>%
+                   group = !!sym(grp_col))) %>%
+      hc_xAxis(title = list(text = x_col)) %>%
       hc_yAxis(title = list(text = paste0(U()$unit))) %>%
-      hc_title(text = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023")) %>% 
-      hc_add_theme(hc_theme_economist()) %>% 
-      hc_colors(abscol) %>% 
-      hc_tooltip(crosshairs = TRUE, valueSuffix = paste0(" ",U()$unit)) %>% 
+      hc_title(text = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023")) %>%
+      hc_add_theme(hc_theme_economist()) %>%
+      hc_colors(abscol) %>%
+      hc_tooltip(crosshairs = TRUE, valueSuffix = paste0(" ", U()$unit)) %>%
+      hc_plotOptions(column = list(stacking = if (ausn_stack) "normal" else NULL)) %>%
       apply_font_styles(input$showDataLabels)
-    
+
     }
   
   
@@ -1495,34 +1669,40 @@ output$hcontainer <- renderHighchart({
            (length(maj_vals) >= 1 || length(min_vals) >= 1)) {
     
     df   <- Ausnut_tab_filtered()
-    xvar <- rlang::sym(x_axis())
-    gvar <- rlang::sym(groupby())
+    x_col   <- if (is_swapped && !ausn_stack) groupby() else x_axis()
+    grp_col <- if (is_swapped && !ausn_stack) x_axis() else groupby()
+    xvar <- rlang::sym(x_col)
+    gvar <- rlang::sym(grp_col)
     cats <- df %>% distinct(!!xvar) %>% pull()
-    
-    hc <- build_base_chart(
-      series_type = "column",
-      x_title     = x_axis(),
-      y_title     = paste0(U()$unit),
-      title_text  = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
+
+    hc_base <- build_base_chart(
+      series_type  = "column",
+      x_title      = x_col,
+      y_title      = paste0(U()$unit),
+      title_text   = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
       value_suffix = U()$unit
-    ) %>%
-      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column", 
-                                      categories = cats, 
-                                      show_errorbars  = show_err)
-   
+    )
+    hc <- if (ausn_stack)
+      add_stacked_columns_with_errorbars(hc_base, df, xvar, gvar,
+                                         categories = cats, show_errorbars = ausn_show_err)
+    else
+      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "column",
+                                      categories = cats, show_errorbars = ausn_show_err)
   }
-  
+
   # CASE 5: Nutrients table
   else if (input$choosetable == "Nutrients") {
     
     df   <- Nutrient_tab_filtered()
-    xvar <- rlang::sym(x_axis_nut())
-    gvar <- rlang::sym(groupby_nut())
+    x_col   <- if (is_swapped) groupby_nut() else x_axis_nut()
+    grp_col <- if (is_swapped) x_axis_nut() else groupby_nut()
+    xvar <- rlang::sym(x_col)
+    gvar <- rlang::sym(grp_col)
     cats <- df %>% distinct(!!xvar) %>% pull()
-    
+
     hc <- build_base_chart(
       series_type = "column",
-      x_title     = x_axis_nut(),
+      x_title     = x_col,
       y_title     = paste0(Un()$unit, ", ", Type_unit()$Type_unit),
       title_text  = paste0("Daily mean ", input$Nutrient, ", ", Un()$unit, ", ", format_years(nut_year())),
       value_suffix = Un()$unit
@@ -1538,26 +1718,28 @@ output$hcontainer <- renderHighchart({
       dplyr::mutate(Year = factor(Year, levels = c("2011-12", "2023"))) %>%
       dplyr::arrange(Year)
     
-    xvar <- rlang::sym(x_axis_macro())
-    gvar <- rlang::sym(groupby_macro())
+    x_col   <- if (is_swapped && !macro_stack) groupby_macro() else x_axis_macro()
+    grp_col <- if (is_swapped && !macro_stack) x_axis_macro() else groupby_macro()
+    xvar <- rlang::sym(x_col)
+    gvar <- rlang::sym(grp_col)
     cats <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull()
-    show_err <- isTruthy(input$showErrorBars)
-    
-    hc <- build_base_chart(
+    hc_base <- build_base_chart(
       series_type  = "column",
-      x_title      = x_axis_macro(),
+      x_title      = x_col,
       y_title      = paste0(Um()$unit),
       title_text   = paste0("Percent dietary energy from selected macronutrients, ",
                             format_years(macro_year())),
       value_suffix = Um()$unit
-    ) %>%
-      add_stacked_columns_with_errorbars(
-        df, xvar, gvar,
-        categories     = cats,
-        group_padding  = 0.2,   # match your theme if different
-        point_padding  = 0.1,
-        show_errorbars = show_err # or FALSE
-      )
+    )
+    hc <- if (macro_stack)
+      add_stacked_columns_with_errorbars(hc_base, df, xvar, gvar,
+                                         categories    = cats,
+                                         group_padding = 0.2,
+                                         point_padding = 0.1,
+                                         show_errorbars = macro_show_err)
+    else
+      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "column",
+                                      categories = cats, show_errorbars = macro_show_err)
   }
   
   # Style once at the end
@@ -1570,5 +1752,5 @@ output$hcontainer <- renderHighchart({
 } 
                  
 #-------------------
-shinyApp(ui, server)
+shiny::runApp(shinyApp(ui, server), port = 8888, launch.browser = TRUE)
 #-------------------
