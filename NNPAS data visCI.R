@@ -1293,12 +1293,32 @@ output$hcontainer <- renderHighchart({
 
   # CASE 7: Selected beverages table
   else if (input$choosetable == "Bev") {
-    df      <- Bev_tab_filtered()
-    x_col   <- if (is_swapped) groupby_bev() else x_axis_bev()
-    grp_col <- if (is_swapped) x_axis_bev()  else groupby_bev()
-    xvar    <- rlang::sym(x_col)
-    gvar    <- rlang::sym(grp_col)
-    cats    <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull()
+    df <- Bev_tab_filtered() %>%
+      dplyr::mutate(Year = factor(Year, levels = c("2011-12", "2023"))) %>%
+      dplyr::arrange(Year)
+
+    bev_vals_n  <- length(input$Beverage)
+    year_vals_n <- length(input$Year_bev)
+
+    # When multiple beverages AND multiple years are both selected, each
+    # (Age group, Beverage) cell has one row per year — they'd overlap using
+    # the normal groupby. Fix: create a compound "Beverage (Year)" series so
+    # every (x-category, series) combination has exactly one row.
+    if (bev_vals_n > 1 && year_vals_n > 1) {
+      df <- df %>%
+        dplyr::mutate(`Beverage (Year)` = paste0(Beverage, " (", Year, ")"),
+                      `Beverage (Year)` = factor(`Beverage (Year)`,
+                                                 levels = unique(paste0(Beverage, " (", Year, ")"))))
+      x_col   <- "Age group"
+      grp_col <- "Beverage (Year)"
+    } else {
+      x_col   <- if (is_swapped) groupby_bev() else x_axis_bev()
+      grp_col <- if (is_swapped) x_axis_bev()  else groupby_bev()
+    }
+
+    xvar <- rlang::sym(x_col)
+    gvar <- rlang::sym(grp_col)
+    cats <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull()
 
     hc <- build_base_chart(
       series_type  = "column",
