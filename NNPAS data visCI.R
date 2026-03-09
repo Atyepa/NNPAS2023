@@ -27,6 +27,7 @@ if (!file.exists("app_data.rds")) {
 AUSNUT_tab    <- .d$AUSNUT_tab
 Nutrients_tab <- .d$Nutrients_tab
 Macro_kJ_tab  <- .d$Macro_kJ_tab
+Bev_tab       <- .d$Bev_tab
 Two_dig       <- .d$Two_dig
 Thr_dig       <- .d$Thr_dig
 rm(.d)
@@ -44,6 +45,12 @@ Macro <- Macro_kJ_tab %>%
   distinct() 
 
 Macro <- as.list(as.character(Macro$Macronutrient))
+
+Beverage <- Bev_tab %>%
+  distinct(Beverage) %>%
+  arrange(Beverage) %>%
+  pull(Beverage) %>%
+  as.list()
 
 # `Age group` list 
 `Age group` <- AUSNUT_tab %>% 
@@ -69,8 +76,9 @@ ui <- fluidPage(
     shinyWidgets::pickerInput("choosetable", "Select table:",
                  choices = c("AUSNUT foodgroups" = "AUSNUT",
                              "Nutrients" = "Nutrients",
-                             "Macronutrient kJ" = "Macro"),
-                 selected = "AUSNUT", 
+                             "Macronutrient kJ" = "Macro",
+                             "Selected beverages" = "Bev"),
+                 selected = "AUSNUT",
                  multiple = FALSE, options = list(`actions-box` = TRUE), width = "300px"),
 
     conditionalPanel(
@@ -145,7 +153,20 @@ ui <- fluidPage(
                   multiple = TRUE, options = list(`actions-box` = TRUE), width = "300px"),
       checkboxInput("Macrostack", "Stack bars", value = TRUE),
     ),
-    
+
+    conditionalPanel(
+      condition = "input.choosetable == 'Bev'",
+
+      checkboxGroupInput("Year_bev", "Year:",
+                         choices = c("2011-12", "2023"), selected = "2023", inline = TRUE),
+
+      pickerInput("Beverage", "Select beverages:",
+                  choices  = Beverage,
+                  selected = Beverage,
+                  multiple = TRUE,
+                  options  = list(`actions-box` = TRUE), width = "300px")
+    ),
+
     checkboxGroupInput("Sex", "Sex:", 
                        choices = c("Males", "Females", "Persons"), 
                        selected = "Persons", inline = TRUE),
@@ -300,8 +321,11 @@ server <- function(input, output, session) {
     list(Year_nut =input$Year_nut) })
   
   Year_macro <-  reactive({
-    list(Year_macro =input$Year_macro) })  
-  
+    list(Year_macro =input$Year_macro) })
+
+  Year_bev <- reactive({
+    list(Year_bev = input$Year_bev) })
+
     format_years <- function(years) {
     if (length(years) == 1) {
       return(years)
@@ -427,6 +451,19 @@ Ausnut_tab_filtered <- reactive({
       filter(Macronutrient %in% MacrokJ()$MacrokJ) 
   })  
                 
+  Bev_tab_filtered <- reactive({
+    year_bev <- input$Year_bev
+    bev_sel  <- input$Beverage
+    Bev_tab %>%
+      mutate(Year = factor(Year, levels = c("2011-12", "2023")),
+             Sex  = factor(Sex,  levels = c("Males", "Females", "Persons"))) %>%
+      arrange(Year, Sex, `Age group`) %>%
+      filter(Sex         %in% Sex()$Sex) %>%
+      filter(`Age group` %in% Agegroup()$Agegroup) %>%
+      filter(Year        %in% year_bev) %>%
+      filter(Beverage    %in% bev_sel)
+  })
+
 #  Units Macro table
 Um <- reactive({
   Macro_kJ_tab %>%
@@ -503,29 +540,55 @@ dt_Macro <- reactive({
     select(wide_val, -.row_type)
   }
 })
-  
+
+dt_Bev <- reactive({
+  show_ci <- isTruthy(input$showErrorBars)
+  df <- Bev_tab_filtered() %>%
+    select(Beverage, Unit, Sex, Year, `Age group`, val, lowerCI, upperCI) %>%
+    distinct()
+  wide_val <- df %>% select(-lowerCI, -upperCI) %>%
+    pivot_wider(1:4, names_from = `Age group`, values_from = val) %>%
+    mutate(.row_type = 1L)
+  if (show_ci) {
+    wide_ci <- df %>%
+      mutate(val = round((upperCI - lowerCI) / 2, 1), Unit = "95% CI (+/-)") %>%
+      select(-lowerCI, -upperCI) %>%
+      pivot_wider(1:4, names_from = `Age group`, values_from = val) %>%
+      mutate(.row_type = 2L)
+    bind_rows(wide_val, wide_ci) %>%
+      arrange(Beverage, Sex, Year, .row_type) %>%
+      select(-.row_type)
+  } else {
+    select(wide_val, -.row_type)
+  }
+})
+
 
 # Table for DT display
 output$table = DT::renderDataTable({
   
  if (input$choosetable == 'AUSNUT') {
     tab <- dt_Ausn() }
-  
+
  if (input$choosetable == 'Nutrients') {
     tab <- dt_Nut() }
-  
+
   if (input$choosetable == 'Macro') {
-    tab <-dt_Macro()  }
- 
+    tab <- dt_Macro() }
+
+  if (input$choosetable == 'Bev') {
+    tab <- dt_Bev() }
+
   tab
 })
 
 # Table for download
 dltab <- reactive({
   tab <- switch(input$choosetable,
-                               'AUSNUT' = dt_Ausn(),
+                               'AUSNUT'    = dt_Ausn(),
                                'Nutrients' = dt_Nut(),
-                               'Macro' = dt_Macro()                )
+                               'Macro'     = dt_Macro(),
+                               'Bev'       = dt_Bev())
 tab
 })
 
@@ -549,6 +612,10 @@ nut_year <- reactive({
 
 macro_year <- reactive({
   unique(Macro_tab_filtered()$Year)
+})
+
+bev_year <- reactive({
+  unique(Bev_tab_filtered()$Year)
 })
 
 
@@ -714,6 +781,65 @@ x_axis_macro <- reactive({
     "Age group"  # I
   } else {
     "Age group"  # Default fallback
+  }
+})
+
+# Dynamic group & x-axis for Beverages table (mirrors Nutrients logic; Beverage replaces Nutrient)
+groupby_bev <- reactive({
+  sex_vals  <- input$Sex
+  age_vals  <- input$Agegroup
+  bev_vals  <- input$Beverage
+  year_vals <- input$Year_bev
+
+  if (length(sex_vals) >= 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) == 1) {
+    return("Sex")   # A
+  } else if (length(sex_vals) >= 1 && length(age_vals) == 1 && length(bev_vals) >= 1 && length(year_vals) == 1) {
+    return("Sex")   # B
+  } else if (length(sex_vals) >= 1 && length(age_vals) == 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
+    return("Year")  # C
+  } else if (length(sex_vals) == 1 && length(age_vals) == 1 && length(bev_vals) >= 1 && length(year_vals) > 1) {
+    return("Year")  # D
+  } else if (length(sex_vals) == 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
+    return("Year")  # E
+  } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) > 1 && length(year_vals) >= 1) {
+    return("Sex")   # F
+  } else if (length(sex_vals) > 1 && length(age_vals) >= 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
+    return("Sex")   # G
+  } else if (length(sex_vals) >= 1 && length(age_vals) > 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
+    return("Year")  # H
+  } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) >= 1 && length(year_vals) > 1) {
+    return("Sex")   # I
+  } else {
+    return("Sex")   # Default
+  }
+})
+
+x_axis_bev <- reactive({
+  sex_vals  <- input$Sex
+  age_vals  <- input$Agegroup
+  bev_vals  <- input$Beverage
+  year_vals <- input$Year_bev
+
+  if (length(sex_vals) >= 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) == 1) {
+    return("Age group")  # A
+  } else if (length(sex_vals) >= 1 && length(age_vals) == 1 && length(bev_vals) >= 1 && length(year_vals) == 1) {
+    return("Beverage")   # B
+  } else if (length(sex_vals) >= 1 && length(age_vals) == 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
+    return("Sex")        # C
+  } else if (length(sex_vals) == 1 && length(age_vals) == 1 && length(bev_vals) >= 1 && length(year_vals) > 1) {
+    return("Beverage")   # D
+  } else if (length(sex_vals) == 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
+    return("Age group")  # E
+  } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) > 1 && length(year_vals) >= 1) {
+    return("Age group")  # F
+  } else if (length(sex_vals) > 1 && length(age_vals) >= 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
+    return("Beverage")   # G
+  } else if (length(sex_vals) >= 1 && length(age_vals) > 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
+    return("Age group")  # H
+  } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) >= 1 && length(year_vals) > 1) {
+    return("Age group")  # I
+  } else {
+    return("Age group")  # Default
   }
 })
 
@@ -1160,7 +1286,29 @@ output$hcontainer <- renderHighchart({
       add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "column",
                                       categories = cats, show_errorbars = macro_show_err)
   }
-  
+
+  # CASE 7: Selected beverages table
+  else if (input$choosetable == "Bev") {
+    df      <- Bev_tab_filtered()
+    x_col   <- if (is_swapped) groupby_bev() else x_axis_bev()
+    grp_col <- if (is_swapped) x_axis_bev()  else groupby_bev()
+    xvar    <- rlang::sym(x_col)
+    gvar    <- rlang::sym(grp_col)
+    cats    <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull()
+
+    hc <- build_base_chart(
+      series_type  = "column",
+      x_title      = x_col,
+      y_title      = "% consumers",
+      title_text   = paste0("People who consumed selected beverages (%), ",
+                            format_years(bev_year())),
+      value_suffix = "%"
+    ) %>%
+      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
+                                      categories     = cats,
+                                      show_errorbars = show_err)
+  }
+
   # Style once at the end
   if (!is.null(hc)) {
     hc <- hc %>% apply_font_styles(input$showDataLabels)

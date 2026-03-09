@@ -220,6 +220,49 @@ process_AUSNUT_table7 <- function(filename, sheet_nums, names_vec = AUSNUT_names
   dplyr::bind_rows(mean_out, pct_out)
 }
 
+# Table 14: Beverages (proportions + margins of error; sex blocks stacked in one sheet)
+# Sheet layout: Persons rows 9-32, Males rows 36-59, Females rows 63-86 (same for both val/MoE sheets)
+process_beverages_table <- function(dcpath, filename, val_sheet, moe_sheet, bev_col_names, bev_age_cols) {
+  url <- paste0(dcpath, "/", filename)
+  tmp <- tempfile(fileext = ".xlsx")
+  download.file(url, tmp, mode = "wb")
+
+  sex_ranges <- list(Persons = "A9:L32", Males = "A36:L59", Females = "A63:L86")
+
+  read_sex_block <- function(sheet, sex_name, range) {
+    readxl::read_excel(tmp, sheet = sheet, range = range, col_names = FALSE) %>%
+      setNames(bev_col_names) %>%
+      force_numeric(bev_age_cols) %>%
+      filter(if_any(all_of(bev_age_cols), ~!is.na(.))) %>%
+      mutate(Sex = sex_name)
+  }
+
+  val_data <- purrr::imap(sex_ranges, ~read_sex_block(val_sheet, .y, .x)) %>%
+    bind_rows() %>%
+    mutate(Unit = "%") %>%
+    strip_brace("Beverage")
+
+  moe_data <- purrr::imap(sex_ranges, ~read_sex_block(moe_sheet, .y, .x)) %>%
+    bind_rows() %>%
+    strip_brace("Beverage")
+
+  val_data %>%
+    pivot_longer(cols = all_of(bev_age_cols), names_to = "Age group", values_to = "val") %>%
+    mutate(`Age group` = factor(`Age group`, levels = bev_age_cols),
+           Sex = factor(Sex, levels = c("Males", "Females", "Persons"))) %>%
+    left_join(
+      moe_data %>%
+        pivot_longer(cols = all_of(bev_age_cols), names_to = "Age group", values_to = "MoE") %>%
+        mutate(`Age group` = factor(`Age group`, levels = bev_age_cols),
+               Sex = factor(Sex, levels = c("Males", "Females", "Persons"))) %>%
+        select(Sex, Beverage, `Age group`, MoE),
+      by = c("Sex", "Beverage", "Age group")
+    ) %>%
+    mutate(lowerCI = round(val - MoE, 1),
+           upperCI = round(val + MoE, 1)) %>%
+    select(-MoE)
+}
+
 # ---------- column name vectors ----------
 T1_val_names <- c("Nutrient","Unit","02-04","05-11","12-17","18-29","30-49","50-64","65-74","75+","02-17","18+","Total")
 T1_rse_names <- c("Nutrient","02-04","05-11","12-17","18-29","30-49","50-64","65-74","75+","02-17","18+","Total")
@@ -227,6 +270,8 @@ T2_names     <- c("Macronutrient","02-04","05-11","12-17","18-29","30-49","50-64
 T3_est_names <- c("Nutrient","Unit","02-04","05-11","12-17","18-29","30-49","50-64","65-74","75+","02-17","18+","Total")
 T3_rse_names <- c("Nutrient","02-04","05-11","12-17","18-29","30-49","50-64","65-74","75+","02-17","18+","Total")
 AUSNUT_names <- c("Label","02-04","05-11","12-17","18-29","30-49","50-64","65-74","75+","02-17","18+","Total")
+bev_age_cols <- c("02-04","05-11","12-17","18-29","30-49","50-64","65-74","75+","02-17","18+","Total")
+bev_col_names <- c("Beverage", bev_age_cols)
 
 # ---------- download and process ----------
 message("Processing Table 1 (2023)...")
@@ -268,6 +313,18 @@ Table7 <- process_AUSNUT_table7("NNPASDC07.xlsx",
   AUSNUT_names, AUSNUT_class)
 message("Processing AUSNUT Table 8...")
 Table8 <- process_AUSNUT_tables("NNPASDC08.xlsx", c(2,4,6,3,5,7), AUSNUT_names, AUSNUT_class, "Disc energy", "Percent")
+
+message("Processing Table 14 (2023 beverages)...")
+Bev_2023 <- process_beverages_table(dcpath, "NNPASDC14.xlsx",
+                                    val_sheet = 2, moe_sheet = 3,
+                                    bev_col_names, bev_age_cols) %>%
+  mutate(Year = "2023")
+message("Processing Table 14 (2011-12 beverages)...")
+Bev_2011 <- process_beverages_table(dcpath, "NNPASDC14.xlsx",
+                                    val_sheet = 4, moe_sheet = 5,
+                                    bev_col_names, bev_age_cols) %>%
+  mutate(Year = "2011-12")
+Bev_tab <- bind_rows(Bev_2023, Bev_2011)
 
 message("Building final tables...")
 Nutrients_tab <- bind_rows(Table1, Table3)
@@ -319,6 +376,7 @@ saveRDS(
     AUSNUT_tab    = AUSNUT_tab,
     Nutrients_tab = Nutrients_tab,
     Macro_kJ_tab  = Macro_kJ_tab,
+    Bev_tab       = Bev_tab,
     Two_dig       = Two_dig,
     Thr_dig       = Thr_dig
   ),
