@@ -857,6 +857,8 @@ output$warning <- renderUI({
   year_nut_vals  <- input$Year_nut
   year_macro_vals <- input$Year_macro
   macro_vals <- input$MacrokJ
+  bev_vals   <- input$Beverage
+  year_bev_vals <- input$Year_bev
   
   warnings <- tagList()
   
@@ -895,11 +897,24 @@ output$warning <- renderUI({
         (length(age_vals) > 1 && length(macro_vals) > 1 && length(year_macro_vals) > 1)    # I
       )) {
     warnings <- tagAppendChild(warnings, tags$div(class = "alert alert-warning",
-                                                  "Too many dimensions selected:  
-                                                  If you are trying to compare consumption of Macronutients by Year Age group and Sex, 
+                                                  "Too many dimensions selected:
+                                                  If you are trying to compare consumption of Macronutients by Year Age group and Sex,
                                                   please ensure that one of these four variables is limited to a single selection. For example, limit Sex to just 'Persons' or Age group to 'Total' or limit Year to either '2011' or '2023'."))
   }
-  
+
+  # Beverages warning — note: multiple beverages + multiple years with one Sex is
+  # handled via compound series and does NOT trigger a warning.
+  if (input$choosetable == "Bev" &&
+      (
+        (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) > 1) ||       # F
+        (length(sex_vals) > 1 && length(age_vals) > 1 && length(year_bev_vals) > 1) ||  # G
+        (length(sex_vals) > 1 && length(bev_vals) > 1 && length(year_bev_vals) > 1)     # H
+      )) {
+    warnings <- tagAppendChild(warnings, tags$div(class = "alert alert-warning",
+                                                  "Too many dimensions selected: the chart cannot display Sex, Age group, Beverage, and Year simultaneously.
+                                                  Limit to one of: a single Sex (e.g. 'Persons'), a single Age group (e.g. 'Total'), a single Beverage, or a single Year."))
+  }
+
   return(warnings)
 })
 
@@ -1306,7 +1321,7 @@ output$hcontainer <- renderHighchart({
     # every (x-category, series) combination has exactly one row.
     # Series ordered Bev1 2011-12, Bev1 2023, Bev2 2011-12, Bev2 2023 so
     # same-beverage bars are adjacent for easy year comparison.
-    if (bev_vals_n > 1 && year_vals_n > 1) {
+    if (bev_vals_n > 1 && year_vals_n > 1 && length(input$Sex) == 1) {
       bev_order  <- unique(as.character(df$Beverage))
       yr_order   <- c("2011-12", "2023")[c("2011-12", "2023") %in% unique(as.character(df$Year))]
       cmp_levels <- as.vector(t(outer(bev_order, yr_order, function(b, y) paste0(b, " (", y, ")"))))
