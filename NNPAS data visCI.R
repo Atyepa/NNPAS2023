@@ -784,33 +784,35 @@ x_axis_macro <- reactive({
   }
 })
 
-# Dynamic group & x-axis for Beverages table (mirrors Nutrients logic; Beverage replaces Nutrient)
+# Dynamic group & x-axis for Beverages table (mirrors Macro logic; Beverage replaces Macronutrient)
 groupby_bev <- reactive({
   sex_vals  <- input$Sex
   age_vals  <- input$Agegroup
   bev_vals  <- input$Beverage
   year_vals <- input$Year_bev
 
-  if (length(sex_vals) >= 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) == 1) {
-    return("Sex")   # A
+  if (length(sex_vals) == 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
+    "Year"      # A
   } else if (length(sex_vals) >= 1 && length(age_vals) == 1 && length(bev_vals) >= 1 && length(year_vals) == 1) {
-    return("Sex")   # B
-  } else if (length(sex_vals) >= 1 && length(age_vals) == 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
-    return("Year")  # C
+    "Beverage"  # B
+  } else if (length(sex_vals) == 1 && length(age_vals) >= 1 && length(bev_vals) >= 1 && length(year_vals) == 1) {
+    "Beverage"  # D
+  } else if (length(sex_vals) >= 1 && length(age_vals) == 1 && length(bev_vals) == 1 && length(year_vals) >= 1) {
+    "Sex"       # E
   } else if (length(sex_vals) == 1 && length(age_vals) == 1 && length(bev_vals) >= 1 && length(year_vals) > 1) {
-    return("Year")  # D
-  } else if (length(sex_vals) == 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
-    return("Year")  # E
+    "Beverage"  # D (again)
+  } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) == 1) {
+    "Sex"       # E (again)
   } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) > 1 && length(year_vals) >= 1) {
-    return("Sex")   # F
-  } else if (length(sex_vals) > 1 && length(age_vals) >= 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
-    return("Sex")   # G
-  } else if (length(sex_vals) >= 1 && length(age_vals) > 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
-    return("Year")  # H
-  } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) >= 1 && length(year_vals) > 1) {
-    return("Sex")   # I
+    "Year"      # F
+  } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
+    "Year"      # G
+  } else if (length(sex_vals) > 1 && length(age_vals) == 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
+    "Beverage"  # H
+  } else if (length(sex_vals) == 1 && length(age_vals) > 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
+    "Beverage"  # I
   } else {
-    return("Sex")   # Default
+    "Beverage"  # Default fallback
   }
 })
 
@@ -820,26 +822,28 @@ x_axis_bev <- reactive({
   bev_vals  <- input$Beverage
   year_vals <- input$Year_bev
 
-  if (length(sex_vals) >= 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) == 1) {
-    return("Age group")  # A
+  if (length(sex_vals) == 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
+    "Age group"  # A
   } else if (length(sex_vals) >= 1 && length(age_vals) == 1 && length(bev_vals) >= 1 && length(year_vals) == 1) {
-    return("Beverage")   # B
-  } else if (length(sex_vals) >= 1 && length(age_vals) == 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
-    return("Sex")        # C
+    "Sex"        # B
+  } else if (length(sex_vals) == 1 && length(age_vals) >= 1 && length(bev_vals) >= 1 && length(year_vals) == 1) {
+    "Age group"  # D
+  } else if (length(sex_vals) >= 1 && length(age_vals) == 1 && length(bev_vals) == 1 && length(year_vals) >= 1) {
+    "Year"       # E
   } else if (length(sex_vals) == 1 && length(age_vals) == 1 && length(bev_vals) >= 1 && length(year_vals) > 1) {
-    return("Beverage")   # D
-  } else if (length(sex_vals) == 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
-    return("Age group")  # E
+    "Year"       # D (again)
+  } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) == 1) {
+    "Age group"  # E (again)
   } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) > 1 && length(year_vals) >= 1) {
-    return("Age group")  # F
-  } else if (length(sex_vals) > 1 && length(age_vals) >= 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
-    return("Beverage")   # G
-  } else if (length(sex_vals) >= 1 && length(age_vals) > 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
-    return("Age group")  # H
-  } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) >= 1 && length(year_vals) > 1) {
-    return("Age group")  # I
+    "Age group"  # F
+  } else if (length(sex_vals) > 1 && length(age_vals) > 1 && length(bev_vals) == 1 && length(year_vals) > 1) {
+    "Age group"  # G
+  } else if (length(sex_vals) > 1 && length(age_vals) == 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
+    "Year"       # H
+  } else if (length(sex_vals) == 1 && length(age_vals) > 1 && length(bev_vals) > 1 && length(year_vals) > 1) {
+    "Age group"  # I
   } else {
-    return("Age group")  # Default
+    "Age group"  # Default fallback
   }
 })
 
