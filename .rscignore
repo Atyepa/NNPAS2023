@@ -12,5 +12,6 @@ old_custom_styles.R
 # Deployment metadata
 rsconnect/
 
-# Documentation (not needed at runtime)
+# Documentation / tooling (not needed at runtime)
 README.md
+prep_data.R
