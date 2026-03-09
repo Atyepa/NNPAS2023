@@ -7,7 +7,7 @@ library(shinyWidgets)
 library(shinythemes)
 library(readxl)
 options(warn=-1)
-options(shiny.launch.browser = TRUE)
+options(shiny.launch.browser = FALSE)
 
 # Source the custom styles function
 source("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/custom_styles.R")
@@ -1171,5 +1171,5 @@ output$hcontainer <- renderHighchart({
 } 
                  
 #-------------------
-shiny::runApp(shinyApp(ui, server), port = 8888, launch.browser = TRUE)
+shinyApp(ui, server)
 #-------------------
