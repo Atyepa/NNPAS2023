@@ -46,11 +46,33 @@ Macro <- Macro_kJ_tab %>%
 
 Macro <- as.list(as.character(Macro$Macronutrient))
 
-Beverage <- Bev_tab %>%
-  distinct(Beverage) %>%
-  arrange(Beverage) %>%
-  pull(Beverage) %>%
-  as.list()
+bev_order_defined <- c(
+  "Total selected sugar-sweetened beverages",
+  "Total selected intense-sweetened beverages",
+  "Total selected sugar- and intense-sweetened beverages",
+  "Total selected electrolyte and energy drinks, and fortified water",
+  "Total selected beverages",
+  "Total cordials",
+  "Total soft drinks and flavoured mineral water",
+  "Total other selected beverages",
+  "Soft drinks, and flavoured mineral waters — sugar-sweetened",
+  "Soft drinks, and flavoured mineral waters — intense-sweetened",
+  "Cordials — sugar-sweetened",
+  "Cordials — intense-sweetened",
+  "Fruit and vegetable drinks",
+  "Energy drinks",
+  "Electrolyte drinks",
+  "Flavoured milks and milkshakes",
+  "Dairy milk substitutes, flavoured",
+  "Breakfast cereal beverages",
+  "De-alcoholised beverages"
+)
+
+bev_names_in_data <- unique(as.character(Bev_tab$Beverage))
+Beverage <- as.list(c(
+  intersect(bev_order_defined, bev_names_in_data),
+  sort(setdiff(bev_names_in_data, bev_order_defined))
+))
 
 # `Age group` list 
 `Age group` <- AUSNUT_tab %>% 
@@ -162,7 +184,7 @@ ui <- fluidPage(
 
       pickerInput("Beverage", "Select beverages:",
                   choices  = Beverage,
-                  selected = Beverage,
+                  selected = "Total selected sugar-sweetened beverages",
                   multiple = TRUE,
                   options  = list(`actions-box` = TRUE), width = "300px")
     ),
@@ -189,6 +211,9 @@ ui <- fluidPage(
     
     checkboxInput("showDataLabels", "Show Data Labels", value = TRUE),
     checkboxInput("showErrorBars", "Show error bars", value = FALSE),
+    radioButtons("chartOrientation", "Chart orientation:",
+                 choices = c("Column" = "column", "Bar" = "bar"),
+                 selected = "column", inline = TRUE),
 
     tags$div(
       style = "margin-top: 8px;",
@@ -932,6 +957,7 @@ output$hcontainer <- renderHighchart({
   macro_stack <- isTRUE(input$Macrostack)
   ausn_show_err  <- show_err && !ausn_stack
   macro_show_err <- show_err && !macro_stack
+  orient      <- if (isTRUE(input$chartOrientation == "bar")) "bar" else "column"
 
   # ---------- helpers ----------
   build_base_chart <- function(series_type = c("column","bar"),
@@ -959,11 +985,18 @@ output$hcontainer <- renderHighchart({
     
     if (is.null(categories)) categories <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull()
     hc <- hc %>% hc_xAxis(categories = categories)
-    
+
     # 0-based category index for explicit x placement
     cat_idx <- setNames(seq_along(categories) - 1, as.character(categories))
-    
-    groups <- df %>% dplyr::distinct(!!gvar) %>% dplyr::pull()
+
+    # Respect factor level ordering (important for compound Beverage(Year) series)
+    groups_raw <- df %>% dplyr::distinct(!!gvar) %>% dplyr::pull()
+    groups <- if (is.factor(groups_raw)) {
+      lvls <- levels(groups_raw)
+      lvls[lvls %in% as.character(groups_raw)]
+    } else {
+      groups_raw
+    }
     n <- length(groups)
     
     span <- 1 - 2 * inner_pad
@@ -1127,7 +1160,7 @@ output$hcontainer <- renderHighchart({
     cats <- df %>% distinct(!!xvar) %>% pull()
 
     hc_base <- build_base_chart(
-      series_type  = "bar",
+      series_type  = orient,
       x_title      = x_col,
       y_title      = paste0(U()$unit),
       title_text   = paste0(input$A_Nutrient, ", selected foods, 2023"),
@@ -1136,9 +1169,9 @@ output$hcontainer <- renderHighchart({
     hc <- if (ausn_stack)
       add_stacked_columns_with_errorbars(hc_base, df, xvar, gvar,
                                          categories = cats,
-                                         show_errorbars = ausn_show_err, series_type = "bar")
+                                         show_errorbars = ausn_show_err, series_type = orient)
     else
-      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "bar",
+      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = orient,
                                       categories = cats, show_errorbars = ausn_show_err)
   }
   
@@ -1157,7 +1190,7 @@ output$hcontainer <- renderHighchart({
     cats <- df %>% distinct(!!xvar) %>% pull()
 
     hc_base <- build_base_chart(
-      series_type  = "column",
+      series_type  = orient,
       x_title      = x_col,
       y_title      = paste0(U()$unit),
       title_text   = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
@@ -1165,9 +1198,10 @@ output$hcontainer <- renderHighchart({
     )
     hc <- if (ausn_stack)
       add_stacked_columns_with_errorbars(hc_base, df, xvar, gvar,
-                                         categories = cats, show_errorbars = ausn_show_err)
+                                         categories = cats, show_errorbars = ausn_show_err,
+                                         series_type = orient)
     else
-      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "column",
+      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = orient,
                                       categories = cats, show_errorbars = ausn_show_err)
   }
 
@@ -1175,7 +1209,7 @@ output$hcontainer <- renderHighchart({
   else if (input$choosetable == "AUSNUT" &&
            length(age_vals) > 1 &&
            ((length(maj_vals) >=1 && length(maj_vals) <= 4) || (length(min_vals)>=1 && length(min_vals) <= 4))) {
-    
+
     df   <- Ausnut_tab_filtered()
     x_col   <- if (is_swapped && !ausn_stack) groupby() else x_axis()
     grp_col <- if (is_swapped && !ausn_stack) x_axis() else groupby()
@@ -1184,7 +1218,7 @@ output$hcontainer <- renderHighchart({
     cats <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull() %>% as.character()
 
     hc_base <- build_base_chart(
-      series_type  = "column",
+      series_type  = orient,
       x_title      = x_col,
       y_title      = paste0(U()$unit),
       title_text   = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
@@ -1192,9 +1226,10 @@ output$hcontainer <- renderHighchart({
     )
     hc <- if (ausn_stack)
       add_stacked_columns_with_errorbars(hc_base, df, xvar, gvar,
-                                         categories = cats, show_errorbars = ausn_show_err)
+                                         categories = cats, show_errorbars = ausn_show_err,
+                                         series_type = orient)
     else
-      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "column",
+      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = orient,
                                       categories = cats, show_errorbars = ausn_show_err)
     }
 
@@ -1210,7 +1245,7 @@ output$hcontainer <- renderHighchart({
 
     hc <- df %>%
       hchart(.,
-             type = "column",
+             type = orient,
              hcaes(x = !!sym(x_col),
                    y = val,
                    group = !!sym(grp_col))) %>%
@@ -1220,7 +1255,8 @@ output$hcontainer <- renderHighchart({
       hc_add_theme(hc_theme_economist()) %>%
       hc_colors(abscol) %>%
       hc_tooltip(crosshairs = TRUE, valueSuffix = paste0(" ", U()$unit)) %>%
-      hc_plotOptions(column = list(stacking = if (ausn_stack) "normal" else NULL)) %>%
+      hc_plotOptions(column = list(stacking = if (ausn_stack) "normal" else NULL),
+                     bar    = list(stacking = if (ausn_stack) "normal" else NULL)) %>%
       apply_font_styles(input$showDataLabels)
 
     }
@@ -1240,7 +1276,7 @@ output$hcontainer <- renderHighchart({
     cats <- df %>% distinct(!!xvar) %>% pull()
 
     hc_base <- build_base_chart(
-      series_type  = "column",
+      series_type  = orient,
       x_title      = x_col,
       y_title      = paste0(U()$unit),
       title_text   = paste0(paste(Label(), collapse = ", "), ", ", input$A_Nutrient, ", 2023"),
@@ -1248,15 +1284,16 @@ output$hcontainer <- renderHighchart({
     )
     hc <- if (ausn_stack)
       add_stacked_columns_with_errorbars(hc_base, df, xvar, gvar,
-                                         categories = cats, show_errorbars = ausn_show_err)
+                                         categories = cats, show_errorbars = ausn_show_err,
+                                         series_type = orient)
     else
-      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "column",
+      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = orient,
                                       categories = cats, show_errorbars = ausn_show_err)
   }
 
   # CASE 5: Nutrients table
   else if (input$choosetable == "Nutrients") {
-    
+
     df   <- Nutrient_tab_filtered()
     x_col   <- if (is_swapped) groupby_nut() else x_axis_nut()
     grp_col <- if (is_swapped) x_axis_nut() else groupby_nut()
@@ -1265,30 +1302,30 @@ output$hcontainer <- renderHighchart({
     cats <- df %>% distinct(!!xvar) %>% pull()
 
     hc <- build_base_chart(
-      series_type = "column",
+      series_type = orient,
       x_title     = x_col,
       y_title     = paste0(Un()$unit, ", ", Type_unit()$Type_unit),
       title_text  = paste0("Daily mean ", input$Nutrient, ", ", Un()$unit, ", ", format_years(nut_year())),
       value_suffix = Un()$unit
     ) %>%
-      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
-                                      categories = cats, 
+      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = orient,
+                                      categories = cats,
                                       show_errorbars  = show_err)
   }
-  
+
   # CASE 6: Macro table (stacked columns)
   else if (input$choosetable == "Macro") {
     df <- Macro_tab_filtered() %>%
       dplyr::mutate(Year = factor(Year, levels = c("2011-12", "2023"))) %>%
       dplyr::arrange(Year)
-    
+
     x_col   <- if (is_swapped && !macro_stack) groupby_macro() else x_axis_macro()
     grp_col <- if (is_swapped && !macro_stack) x_axis_macro() else groupby_macro()
     xvar <- rlang::sym(x_col)
     gvar <- rlang::sym(grp_col)
     cats <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull()
     hc_base <- build_base_chart(
-      series_type  = "column",
+      series_type  = orient,
       x_title      = x_col,
       y_title      = paste0(Um()$unit),
       title_text   = paste0("Percent dietary energy from selected macronutrients, ",
@@ -1300,9 +1337,10 @@ output$hcontainer <- renderHighchart({
                                          categories    = cats,
                                          group_padding = 0.2,
                                          point_padding = 0.1,
-                                         show_errorbars = macro_show_err)
+                                         show_errorbars = macro_show_err,
+                                         series_type   = orient)
     else
-      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = "column",
+      add_grouped_bars_with_errorbars(hc_base, df, xvar, gvar, series_type = orient,
                                       categories = cats, show_errorbars = macro_show_err)
   }
 
@@ -1322,7 +1360,8 @@ output$hcontainer <- renderHighchart({
     # Series ordered Bev1 2011-12, Bev1 2023, Bev2 2011-12, Bev2 2023 so
     # same-beverage bars are adjacent for easy year comparison.
     if (bev_vals_n > 1 && year_vals_n > 1 && length(input$Sex) == 1) {
-      bev_order  <- unique(as.character(df$Beverage))
+      # Use picker selection order (respects bev_order_defined) rather than data appearance order
+      bev_order  <- intersect(unlist(Beverage), unique(as.character(df$Beverage)))
       yr_order   <- c("2011-12", "2023")[c("2011-12", "2023") %in% unique(as.character(df$Year))]
       cmp_levels <- as.vector(outer(yr_order, bev_order, function(y, b) paste0(b, " (", y, ")")))
       df <- df %>%
@@ -1340,14 +1379,15 @@ output$hcontainer <- renderHighchart({
     cats <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull()
 
     hc <- build_base_chart(
-      series_type  = "column",
+      series_type  = orient,
       x_title      = x_col,
       y_title      = "% consumers",
-      title_text   = paste0("People who consumed selected beverages (%), ",
+      title_text   = paste0(paste(input$Sex, collapse = " and "),
+                            " who consumed selected beverages (%), ",
                             format_years(bev_year())),
       value_suffix = "%"
     ) %>%
-      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = "column",
+      add_grouped_bars_with_errorbars(df, xvar, gvar, series_type = orient,
                                       categories     = cats,
                                       show_errorbars = show_err)
   }
