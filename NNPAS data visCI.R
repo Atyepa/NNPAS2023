@@ -145,7 +145,6 @@ ui <- fluidPage(
                                "% Discretionary kJ" = "Disc energy"), 
                   selected = "Mean grams", multiple = FALSE,
                   width = "180px"),
-      checkboxInput("AUSNstack", "Stack bars", value = FALSE),
     ),
     
     conditionalPanel(
@@ -173,7 +172,6 @@ ui <- fluidPage(
                   choices = Macro,
                   selected = c("Protein", "Total fat", "Carbohydrate", "Dietary fibre", "Alcohol"),
                   multiple = TRUE, options = list(`actions-box` = TRUE), width = "300px"),
-      checkboxInput("Macrostack", "Stack bars", value = TRUE),
     ),
 
     conditionalPanel(
@@ -209,8 +207,20 @@ ui <- fluidPage(
     actionButton("select_age_groups", "Select standard age groups", icon = icon("filter")),
     
     
+    tags$div(
+      style = "margin-top: 14px; margin-bottom: 6px; font-size: 14px; font-weight: bold; text-transform: uppercase; color: #80B1D3;",
+      "Plot options"
+    ),
     checkboxInput("showDataLabels", "Show Data Labels", value = TRUE),
     checkboxInput("showErrorBars", "Show error bars", value = FALSE),
+    conditionalPanel(
+      condition = "input.choosetable == 'AUSNUT'",
+      checkboxInput("AUSNstack", "Stack bars", value = FALSE)
+    ),
+    conditionalPanel(
+      condition = "input.choosetable == 'Macro'",
+      checkboxInput("Macrostack", "Stack bars", value = TRUE)
+    ),
     radioButtons("chartOrientation", "Chart orientation:",
                  choices = c("Column" = "column", "Bar" = "bar"),
                  selected = "column", inline = TRUE),
