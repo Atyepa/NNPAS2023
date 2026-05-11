@@ -1163,8 +1163,8 @@ output$hcontainer <- renderHighchart({
       arrange(desc(val), .by_group = TRUE) %>%
       ungroup()
 
-    x_col   <- if (is_swapped && !ausn_stack) groupby() else x_axis()
-    grp_col <- if (is_swapped && !ausn_stack) x_axis() else groupby()
+    x_col   <- if (is_swapped) groupby() else x_axis()
+    grp_col <- if (is_swapped) x_axis() else groupby()
     xvar <- rlang::sym(x_col)
     gvar <- rlang::sym(grp_col)
     cats <- df %>% distinct(!!xvar) %>% pull()
@@ -1221,8 +1221,8 @@ output$hcontainer <- renderHighchart({
            ((length(maj_vals) >=1 && length(maj_vals) <= 4) || (length(min_vals)>=1 && length(min_vals) <= 4))) {
 
     df   <- Ausnut_tab_filtered()
-    x_col   <- if (is_swapped && !ausn_stack) groupby() else x_axis()
-    grp_col <- if (is_swapped && !ausn_stack) x_axis() else groupby()
+    x_col   <- if (is_swapped) groupby() else x_axis()
+    grp_col <- if (is_swapped) x_axis() else groupby()
     xvar <- rlang::sym(x_col)
     gvar <- rlang::sym(grp_col)
     cats <- df %>% dplyr::distinct(!!xvar) %>% dplyr::pull() %>% as.character()
@@ -1250,8 +1250,8 @@ output$hcontainer <- renderHighchart({
            (length(maj_vals) <=1 || length(min_vals) <=1 )) {
     
     df <- Ausnut_tab_filtered()
-    x_col   <- if (is_swapped && !ausn_stack) groupby() else x_axis()
-    grp_col <- if (is_swapped && !ausn_stack) x_axis() else groupby()
+    x_col   <- if (is_swapped) groupby() else x_axis()
+    grp_col <- if (is_swapped) x_axis() else groupby()
 
     hc <- df %>%
       hchart(.,
@@ -1279,8 +1279,8 @@ output$hcontainer <- renderHighchart({
            (length(maj_vals) >= 1 || length(min_vals) >= 1)) {
     
     df   <- Ausnut_tab_filtered()
-    x_col   <- if (is_swapped && !ausn_stack) groupby() else x_axis()
-    grp_col <- if (is_swapped && !ausn_stack) x_axis() else groupby()
+    x_col   <- if (is_swapped) groupby() else x_axis()
+    grp_col <- if (is_swapped) x_axis() else groupby()
     xvar <- rlang::sym(x_col)
     gvar <- rlang::sym(grp_col)
     cats <- df %>% distinct(!!xvar) %>% pull()
