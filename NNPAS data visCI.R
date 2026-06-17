@@ -278,7 +278,18 @@ ui <- fluidPage(
   mainPanel(
     tabsetPanel(type = "tabs",
                 tabPanel("Graph", uiOutput("warning"), highchartOutput("hcontainer", height = "760px")),
-                tabPanel("Table", verbatimTextOutput("message"), DT::dataTableOutput("table"))
+                tabPanel("Table", verbatimTextOutput("message"), DT::dataTableOutput("table"),
+                         tags$hr(),
+                         tags$h4("Significance test (two-sample z, 95%)"),
+                         helpText(em(
+                           "Click 2–4 value cells in the table above to compare them pairwise: ",
+                           "z = (a − b) / sqrt(SE_a² + SE_b²), significant at 95% if |z| > 1.96. ",
+                           "Each SE is taken from the cell's own 95% CI. Valid only for ",
+                           "independent (disjoint) cells — different sex, age group, or survey ",
+                           "year. Cells that share respondents (same group but a different ",
+                           "nutrient/food, or a 'Persons' / 'Total' marginal) are flagged as ",
+                           "not independent.")),
+                         tableOutput("sigtest"))
     ),
     
     tags$div(class = "header", checked = NA,
@@ -614,7 +625,10 @@ output$table = DT::renderDataTable({
   if (input$choosetable == 'Bev') {
     tab <- dt_Bev() }
 
-  tab
+  DT::datatable(
+    tab, rownames = TRUE,
+    selection = list(mode = "multiple", target = "cell")
+  )
 })
 
 # Table for download
@@ -631,7 +645,99 @@ tab
 output$downloadTb <- downloadHandler(
   filename = function() { paste0("NNPAS 2023, Selected", input$choosetable," by age for ", input$Sex,".xlsx") },
   content = function(file) { write_xlsx(dltab(), path = file) }
-) 
+)
+
+# ---- Pairwise significance tests on selected table cells -----------------
+# Click 2-4 value cells. For each, map (row, column) back to its estimate
+# (measure x sex x year x age group), recover val and SE from the underlying
+# long data (SE = (upperCI - val) / 1.96, robust to any lower-CI clamping),
+# then run two-sample z-tests on every pair:
+#   z = (val_i - val_j) / sqrt(SE_i^2 + SE_j^2);  significant at 95% if |z| > 1.96.
+# Pairs that are not independent (shared respondents) are flagged, not tested.
+output$sigtest <- renderTable({
+  cells <- input$table_cells_selected
+  if (is.null(cells) || nrow(cells) < 2)
+    return(data.frame(Message =
+      "Click 2-4 value cells in the table above to run pairwise z-tests."))
+  if (nrow(cells) > 4)
+    return(data.frame(Message = paste0(
+      "Too many cells selected (", nrow(cells), "). Select at most 4.")))
+
+  meta <- switch(input$choosetable,
+    "AUSNUT"    = list(w = dt_Ausn(),  long = Ausnut_tab_filtered(),
+                       measure = "Label",         has_year = FALSE,
+                       idcols = c("Class_level","Label","Unit","Sex")),
+    "Nutrients" = list(w = dt_Nut(),   long = Nutrient_tab_filtered(),
+                       measure = "Nutrient",      has_year = TRUE,
+                       idcols = c("Nutrient","Unit","Sex","Year")),
+    "Macro"     = list(w = dt_Macro(), long = Macro_tab_filtered(),
+                       measure = "Macronutrient", has_year = TRUE,
+                       idcols = c("Macronutrient","Unit","Sex","Year")),
+    "Bev"       = list(w = dt_Bev(),   long = Bev_tab_filtered(),
+                       measure = "Beverage",      has_year = TRUE,
+                       idcols = c("Beverage","Unit","Sex","Year")))
+  w <- meta$w; long <- as.data.frame(meta$long)
+
+  # Map each clicked cell to a distinct estimate.
+  est <- list()
+  for (i in seq_len(nrow(cells))) {
+    r <- cells[i, 1]; cc <- cells[i, 2]
+    if (cc < 1 || cc > ncol(w)) next            # rownames col / out of range
+    colname <- names(w)[cc]
+    if (colname %in% meta$idcols) next           # a label column, not a value
+    age  <- colname
+    meas <- as.character(w[[meta$measure]][r])
+    sx   <- as.character(w[["Sex"]][r])
+    yr   <- if (meta$has_year) as.character(w[["Year"]][r]) else NA_character_
+    keep <- as.character(long[[meta$measure]]) == meas &
+            as.character(long[["Sex"]]) == sx &
+            as.character(long[["Age group"]]) == age
+    if (meta$has_year) keep <- keep & as.character(long[["Year"]]) == yr
+    lk <- long[keep, , drop = FALSE]
+    if (nrow(lk) == 0) next
+    key <- paste(meas, sx, yr, age, sep = " | ")
+    est[[key]] <- list(
+      meas = meas, sex = sx, year = yr, age = age,
+      val = lk$val[1], se = (lk$upperCI[1] - lk$val[1]) / 1.96,
+      label = paste(c(meas, if (!is.na(yr)) yr,
+                      if (sx != "Persons") sx,
+                      if (age != "Total") age), collapse = ", "))
+  }
+  est <- est[!duplicated(names(est))]
+  if (length(est) < 2)
+    return(data.frame(Message = paste(
+      "Select at least 2 distinct value cells (not label columns,",
+      "and not two cells of the same estimate).")))
+
+  is_indep <- function(a, b) {
+    if (meta$has_year && !identical(a$year, b$year)) return(TRUE)  # different survey
+    if (a$meas != b$meas) return(FALSE)                            # same people
+    if (a$sex != "Persons" && b$sex != "Persons" && a$sex != b$sex) return(TRUE)
+    if (a$age != "Total"   && b$age != "Total"   && a$age != b$age) return(TRUE)
+    FALSE
+  }
+
+  combs <- utils::combn(length(est), 2)
+  out <- lapply(seq_len(ncol(combs)), function(k) {
+    a <- est[[combs[1, k]]]; b <- est[[combs[2, k]]]
+    indep <- is_indep(a, b)
+    se <- sqrt(a$se^2 + b$se^2)
+    z  <- (a$val - b$val) / se
+    p  <- 2 * stats::pnorm(-abs(z))
+    note <- if (!indep) "not independent (shared respondents)"
+            else if (a$meas != b$meas) "different measures - check comparability"
+            else ""
+    data.frame(
+      Comparison  = paste(a$label, "vs", b$label),
+      Diff        = round(a$val - b$val, 2),
+      z           = round(z, 2),
+      p           = formatC(p, format = "f", digits = 3),
+      `Sig (95%)` = if (!indep) "-" else if (abs(z) > 1.96) "Yes" else "No",
+      Note        = note,
+      check.names = FALSE, stringsAsFactors = FALSE)
+  })
+  do.call(rbind, out)
+}, striped = TRUE, bordered = TRUE, na = "")
 
 #--------------
 # Output plots:          
