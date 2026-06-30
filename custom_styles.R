@@ -113,6 +113,10 @@ abscol <- c("#4FADE7","#1A4472","#F29000","#993366","#669966","#99CC66",
 #   - the in-chart title is only RE-coloured when one already exists, so
 #     title-less charts don't get Highcharts' default "Chart title".
 
+# Sanitise a chart title into a safe export filename (used as
+#   style_plot(filename = clean_fname(title_text))).
+clean_fname <- function(x) gsub("[^A-Za-z0-9]+", "_", x)
+
 style_plot <- function(hc, filename = "GBI_chart", dark = TRUE, font_px = 16) {
 
   pal <- if (dark)
