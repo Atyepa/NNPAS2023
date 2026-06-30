@@ -1,14 +1,13 @@
-
 # custom_styles.R
 # This file defines functions commonly used in custom Shiny app
 # It primarily holds functions to customise the appearance of the app
 # but it also defines a few utility functions
- 
+
 #----------
 # Not in
 #----------
 `%!in%` <- Negate(`%in%`)
- 
+
 #----------------
 # --- UI style--
 #----------------
@@ -20,35 +19,35 @@ custom_styles <- function() {
     .dataTables_info {
         color: white!important;
     }
- 
+
     .paginate_button {
         background: white!important;
     }
- 
+
     thead {
         color: white;
     }
- 
+
     table.dataTable {
         background-color: white!important;
         color: black!important;
     }
- 
+
     table.dataTable th,
     table.dataTable td {
         color: black!important;
     }
- 
+
     table.dataTable thead th {
         background-color: white!important;
         color: black!important;
     }
- 
+
     table.dataTable thead td {
         background-color: white!important;
         color: black!important;
     }
- 
+
     .paginate_button,
     .paginate_button:hover,
     .paginate_button:active {
@@ -59,11 +58,11 @@ custom_styles <- function() {
     "
   )))
 }
- 
+
 #----------------------
 # --- Chart font style--
 #----------------------
- 
+
 # Apply a consistent font & plot style to a highcharter object.
 #' @param hc A highcharter object.
 #' @param showDataLabels Logical; whether to enable data labels (default FALSE).
@@ -84,19 +83,19 @@ apply_font_styles <- function(hc, showDataLabels = FALSE) {
       marker     = list(enabled = FALSE)
     ))
 }
- 
+
 #----------------------
 # --- Colour palette --
 #----------------------
- 
+
 abscol <- c("#4FADE7","#1A4472","#F29000","#993366","#669966","#99CC66",
             "#CC9966","#666666","#8DD3C7","#BEBADA","#FB8072","#80B1D3",
             "#FDB462","#B3DE69","#FCCDE5","#D9D9D9","#BC80BD","#CCEBC5","#ffcc99")
- 
+
 #----------------------------------------------------------------------
 # --- Slide / report styling + export ---
 #----------------------------------------------------------------------
- 
+
 # style_plot(): theme a highcharter chart for comfortable on-screen WORK
 # (dark, blends into the darkly app) while exports are forced to a clean
 # WHITE background for slides / Word / PDF. Apply it LAST in a
@@ -113,61 +112,62 @@ abscol <- c("#4FADE7","#1A4472","#F29000","#993366","#669966","#99CC66",
 #     so data is never posted to Highsoft's public export server.
 #   - the in-chart title is only RE-coloured when one already exists, so
 #     title-less charts don't get Highcharts' default "Chart title".
- 
-style_plot <- function(hc, filename = "GBI_chart", dark = TRUE) {
- 
+
+style_plot <- function(hc, filename = "GBI_chart", dark = TRUE, font_px = 16) {
+
   pal <- if (dark)
     list(bg = "transparent", ink = "#E6EDF3", lab = "#C9D1D9",
          grid = "#30363D", axis = "#8B949E", err = "#C9D1D9")
   else
     list(bg = "#FFFFFF", ink = "#0D1117", lab = "#333333",
          grid = "#E6E6E6", axis = "#888888", err = "#333333")
- 
+
+  fs_lab   <- paste0(font_px, "px")       # axis ticks, legend, data labels
+  fs_title <- paste0(font_px + 2, "px")   # axis titles
+
   # Only style a title/subtitle if the chart actually set one (prevents the
   # default "Chart title" appearing on title-less charts).
   has_title    <- !is.null(hc$x$hc_opts$title$text)    && nzchar(hc$x$hc_opts$title$text)
   has_subtitle <- !is.null(hc$x$hc_opts$subtitle$text) && nzchar(hc$x$hc_opts$subtitle$text)
- 
+
   # ---- on-screen (working) theme ----
   hc <- hc %>%
     hc_chart(backgroundColor = pal$bg, plotBackgroundColor = pal$bg,
              style = list(fontFamily = "Open Sans, Arial, Helvetica, sans-serif")) %>%
     hc_xAxis(lineColor = pal$axis, tickColor = pal$axis,
-             title  = list(style = list(color = pal$ink)),
-             labels = list(style = list(color = pal$lab))) %>%
+             title  = list(style = list(color = pal$ink, fontSize = fs_title)),
+             labels = list(style = list(color = pal$lab, fontSize = fs_lab))) %>%
     hc_yAxis(gridLineColor = pal$grid, lineColor = pal$axis, tickColor = pal$axis,
-             title  = list(style = list(color = pal$ink)),
-             labels = list(style = list(color = pal$lab))) %>%
-    hc_legend(itemStyle = list(color = pal$ink)) %>%
+             title  = list(style = list(color = pal$ink, fontSize = fs_title)),
+             labels = list(style = list(color = pal$lab, fontSize = fs_lab))) %>%
+    hc_legend(itemStyle = list(color = pal$ink, fontSize = fs_lab)) %>%
     hc_plotOptions(
-      series   = list(dataLabels = list(style = list(color = pal$ink, textOutline = "none"))),
+      series   = list(dataLabels = list(style = list(color = pal$ink, fontSize = fs_lab, textOutline = "none"))),
       errorbar = list(color = pal$err, whiskerLength = "30%", stemWidth = 1.5))
   if (has_title) {
     hc <- hc %>% hc_title(style = list(color = pal$ink))
   } else {
-    # No title set: blank it so Highcharts' default "Chart title" never shows
-    # (in the app OR in the white export).
-    hc <- hc %>% hc_title(text = "")
+    hc <- hc %>% hc_title(text = "")   # suppress Highcharts' default "Chart title"
   }
   if (has_subtitle) hc <- hc %>% hc_subtitle(style = list(color = pal$lab))
- 
+
   # ---- export overrides: ALWAYS publication-light, applied only on download ----
   exp <- list(
     chart  = list(backgroundColor = "#FFFFFF", plotBackgroundColor = "#FFFFFF"),
     xAxis  = list(lineColor = "#888888", tickColor = "#888888",
-                  title  = list(style = list(color = "#0D1117")),
-                  labels = list(style = list(color = "#333333"))),
+                  title  = list(style = list(color = "#0D1117", fontSize = fs_title)),
+                  labels = list(style = list(color = "#333333", fontSize = fs_lab))),
     yAxis  = list(gridLineColor = "#E6E6E6", lineColor = "#888888", tickColor = "#888888",
-                  title  = list(style = list(color = "#0D1117")),
-                  labels = list(style = list(color = "#333333"))),
-    legend = list(itemStyle = list(color = "#0D1117")),
+                  title  = list(style = list(color = "#0D1117", fontSize = fs_title)),
+                  labels = list(style = list(color = "#333333", fontSize = fs_lab))),
+    legend = list(itemStyle = list(color = "#0D1117", fontSize = fs_lab)),
     plotOptions = list(
-      series   = list(dataLabels = list(style = list(color = "#0D1117", textOutline = "none"))),
+      series   = list(dataLabels = list(style = list(color = "#0D1117", fontSize = fs_lab, textOutline = "none"))),
       errorbar = list(color = "#333333"))
   )
   if (has_title)    exp$title    <- list(style = list(color = "#0D1117"))
   if (has_subtitle) exp$subtitle <- list(style = list(color = "#333333"))
- 
+
   hc %>%
     hc_add_dependency("modules/exporting.js") %>%
     hc_add_dependency("modules/offline-exporting.js") %>%
@@ -178,4 +178,3 @@ style_plot <- function(hc, filename = "GBI_chart", dark = TRUE) {
                    menuItems = c("downloadSVG", "downloadPNG", "downloadPDF",
                                  "separator", "viewFullscreen"))))
 }
- 
