@@ -1566,6 +1566,7 @@ output$hcontainer <- renderHighchart({
 } 
                  
 #-------------------
+# Local browser launch (RStudio / Rscript on Anna's laptop). Skipped on shinyapps.io.
+if (dir.exists(local_wd)) runApp(shinyApp(ui = ui, server = server), launch.browser = TRUE)
+# Last expression must be a shiny.appobj — shinyapps.io picks this up.
 shinyApp(ui, server)
-#-------------------
-runApp(shinyApp(ui = ui, server = server), launch.browser = TRUE) # only needed for local testing; not used in shinyapps.io deployment
