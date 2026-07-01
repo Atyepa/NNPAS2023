@@ -1,0 +1,29 @@
+# --- R session / project cruft ---
+.Rhistory
+.RData
+.Rdata
+.Ruserdata
+.Rproj.user/
+.rscignore
+
+# --- Editor / assistant config ---
+.claude/
+*.local.json
+
+# --- Local-only and backup copies (not for the repo) ---
+old_*
+*_original.R
+*_local.R
+Backup*/
+
+# --- Large / regenerated data ---
+# app_data.rds is a build artifact (prep_data.R makes it). Keep it OUT of Git
+# if the repo feels heavy; shinyapps.io bundles your local copy at deploy time.
+# Uncomment to ignore:
+# app_data.rds
+
+# --- Raw ABS source spreadsheets (prep_data.R fetches these; not needed in repo) ---
+# Add the exact folder/file names, e.g.:
+# Basic CURF/
+# ADG_Database_2023.xlsx
+# AUSNUT_2023.xlsx
