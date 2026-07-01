@@ -15,6 +15,7 @@ source("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/custom_styles.R"
 # Source the cleaning functions
 source("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/cleaning_fun.R")
 
+setwd("C:/Users/atyeo/OneDrive/R data/NNPAS2023")  # Set the working directory (only needed for local testing; not used in shinyapps.io deployment)
 
 # ---- Data: load pre-baked RDS (fast) or abort with a clear message ----
 # To regenerate app_data.rds after ABS publishes updated data:
@@ -145,6 +146,13 @@ ui <- fluidPage(
                                "% Discretionary kJ" = "Disc energy"), 
                   selected = "Mean grams", multiple = FALSE,
                   width = "180px"),
+
+    sliderInput("rankRange",
+                "Trim foods by value rank (1 = largest):",
+                min = 1, max = 30, value = c(1, 30), step = 1),
+    helpText(em("Two-sided: pull the LEFT handle in to drop the biggest ",
+                "(e.g. water); pull the RIGHT handle in to drop the smallest ",
+                "(insignificant tail).")),              
     ),
     
     conditionalPanel(
@@ -412,23 +420,58 @@ server <- function(input, output, session) {
   
   
 # Filter dataframes according to inputs 
+# 1) BASE filter — your original body, just renamed. Drives the slider bounds.
+Ausnut_base <- reactive({
+  a_nutrient <- input$A_Nutrient
+  majgrp1    <- input$Majgrp1
+  mingrp1    <- input$Mingrp1
+  majmin     <- input$MajMin
+  majmin_sub <- input$MajMin_sub
+  AUSNUT_tab %>%
+    mutate(Sex = factor(Sex, levels = c("Males", "Females", "Persons"))) %>%
+    arrange(Sex, `Age group`) %>%
+    filter(Sex %in% Sex()$Sex) %>%
+    filter(`Age group` %in% Agegroup()$Agegroup) %>%
+    filter(Type == a_nutrient) %>%
+    filter(Class_level %in% Class1()$Class1) %>%
+    filter(cLabel %in% majgrp1 | cLabel %in% mingrp1 |
+             (submajCode %in% majmin &
+                (length(majmin_sub) == 0 | Label %in% majmin_sub)))
+})
+
+# 2) Rank the foods by mean value (desc); rank 1 = largest.
+ausnut_label_rank <- reactive({
+  Ausnut_base() %>%
+    group_by(Label) %>%
+    summarise(rankval = mean(val, na.rm = TRUE), .groups = "drop") %>%
+    arrange(desc(rankval)) %>%
+    mutate(rk = row_number())
+})
+
+# 3) Keep the slider's MAX in step with the food count, but PRESERVE the
+#    user's chosen window across selection changes — only clamp it into
+#    1..n when the number of foods shrinks below the current window.
+observeEvent(ausnut_label_rank(), {
+  n   <- max(nrow(ausnut_label_rank()), 1)
+  cur <- input$rankRange
+  if (is.null(cur)) cur <- c(1, n)          # first load: full range
+  lo  <- min(max(cur[1], 1), n)             # clamp window into 1..n
+  hi  <- min(max(cur[2], lo), n)
+  updateSliderInput(session, "rankRange", max = n, value = c(lo, hi))
+}, ignoreNULL = FALSE)
+
+# 4) Rank-trimmed filter — the drop-in replacement for Ausnut_tab_filtered().
+#    Default window [1, n] keeps everything, so it's a no-op until you move it.
 Ausnut_tab_filtered <- reactive({
-                      a_nutrient <- input$A_Nutrient
-                      majgrp1    <- input$Majgrp1
-                      mingrp1    <- input$Mingrp1
-                      majmin     <- input$MajMin
-                      majmin_sub <- input$MajMin_sub
-                      AUSNUT_tab %>%
-                      mutate(Sex = factor(Sex, levels = c("Males", "Females", "Persons"))) %>%
-                      arrange(Sex, `Age group`) %>%
-                      filter(Sex %in% Sex()$Sex) %>%
-                      filter(`Age group` %in% Agegroup()$Agegroup) %>%
-                      filter(Type == a_nutrient) %>%
-                      filter(Class_level %in% Class1()$Class1) %>%
-                      filter(cLabel %in% majgrp1 | cLabel %in% mingrp1 |
-                               (submajCode %in% majmin &
-                                  (length(majmin_sub) == 0 | Label %in% majmin_sub)))
-                  })
+  df <- Ausnut_base()
+  rr <- input$rankRange
+  if (is.null(rr) || nrow(df) == 0) return(df)
+  keep <- ausnut_label_rank() %>%
+    dplyr::filter(rk >= rr[1], rk <= rr[2]) %>%
+    dplyr::pull(Label)
+  df %>% dplyr::filter(Label %in% keep)
+})
+
                  
 #  Units lookup - Ausnut table  
   U <- reactive({
@@ -1508,9 +1551,13 @@ output$hcontainer <- renderHighchart({
                                       show_errorbars = show_err)
   }
 
-  # Style once at the end
+    # Style once at the end (+ SVG/PNG/PDF export menu, white on export)
   if (!is.null(hc)) {
-    hc <- hc %>% apply_font_styles(input$showDataLabels)
+    ttl   <- hc$x$hc_opts$title$text
+    fname <- if (is.null(ttl) || !nzchar(ttl)) "NNPAS_chart" else clean_fname(ttl)
+    hc <- hc %>%
+      apply_font_styles(input$showDataLabels) %>%
+      style_plot(filename = fname)      # dark = TRUE default; add dark = FALSE for a light working view
   }
   hc
 })
@@ -1520,3 +1567,4 @@ output$hcontainer <- renderHighchart({
 #-------------------
 shinyApp(ui, server)
 #-------------------
+runApp(shinyApp(ui = ui, server = server), launch.browser = TRUE) # only needed for local testing; not used in shinyapps.io deployment

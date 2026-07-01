@@ -14,7 +14,23 @@ source("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/cleaning_fun.R")
 dcpath <- "https://www.abs.gov.au/statistics/health/food-and-nutrition/national-nutrition-and-physical-activity-survey/2023"
 
 message("Loading classification templates...")
-AUSNUT_class <- read_xlsx_from_url("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/AUSNUT23_class.xlsx")
+AUSNUT_class_raw <- read_xlsx_from_url("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/AUSNUT23_class.xlsx")
+
+if ("Description" %in% names(AUSNUT_class_raw)) {
+  # New lookup: Label = short display text, Description = long ABS text.
+  # Keep a long -> short map, and hand the pipeline Label = long (as before),
+  # so every ABS-table join below is unchanged.
+  short_map <- AUSNUT_class_raw %>%
+    dplyr::distinct(Description, Label_short = Label)
+  AUSNUT_class <- AUSNUT_class_raw %>%
+    dplyr::select(-Label) %>%
+    dplyr::rename(Label = Description)
+} else {
+  # Old lookup (no Description column yet): behave exactly as before.
+  short_map    <- tibble::tibble(Description = character(), Label_short = character())
+  AUSNUT_class <- AUSNUT_class_raw
+}
+
 Nut_class    <- read_xlsx_from_url("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/NUT23_class.xlsx") %>%
   strip_brace("Nutrient")
 Macro_class  <- read_xlsx_from_url("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/Macro23_class.xlsx") %>%
@@ -331,6 +347,11 @@ Nutrients_tab <- bind_rows(Table1, Table3)
 Macro_kJ_tab  <- Table2
 
 AUSNUT_tab01 <- bind_rows(Table4, Table5, Table6, Table7, Table8) %>%
+  # Swap the long ABS label for your short display label (falls back to long
+  # where no short was supplied). Done before cLabel so pickers/titles use it.
+  left_join(short_map, by = c("Label" = "Description")) %>%
+  mutate(Label = coalesce(Label_short, Label)) %>%
+  select(-Label_short) %>%
   mutate(cLabel = case_when(Class_level == "Major"     ~ paste0(maj_code,  ", ", Label),
                             Class_level == "Sub-major" ~ paste0(full_code, ", ", Label),
                             TRUE ~ NA_character_),
