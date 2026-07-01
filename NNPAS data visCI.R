@@ -15,7 +15,8 @@ source("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/custom_styles.R"
 # Source the cleaning functions
 source("https://raw.githubusercontent.com/Atyepa/NNPAS2023/main/cleaning_fun.R")
 
-setwd("C:/Users/atyeo/OneDrive/R data/NNPAS2023")  # Set the working directory (only needed for local testing; not used in shinyapps.io deployment)
+local_wd <- "C:/Users/atyeo/OneDrive/R data/NNPAS2023"
+if (dir.exists(local_wd)) setwd(local_wd)  # local testing only; skipped on shinyapps.io
 
 # ---- Data: load pre-baked RDS (fast) or abort with a clear message ----
 # To regenerate app_data.rds after ABS publishes updated data:
