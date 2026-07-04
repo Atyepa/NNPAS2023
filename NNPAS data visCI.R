@@ -113,13 +113,19 @@ table.dataTable thead th, table.dataTable thead td {
   background-color: #2a2a2a !important; color: #ffffff !important;
   border-bottom: 1px solid #444 !important;
 }
-table.dataTable tbody tr { background-color: #222 !important; }
+table.dataTable tbody tr { background-color: #222 !important; color: #eaeaea !important; }
+table.dataTable tbody td,
+table.dataTable tbody th { color: #eaeaea !important; border-top: 1px solid #333 !important; }
 table.dataTable.stripe tbody tr.odd,
 table.dataTable.display tbody tr.odd { background-color: #262626 !important; }
+table.dataTable.stripe tbody tr.odd td,
+table.dataTable.display tbody tr.odd td { color: #eaeaea !important; }
 table.dataTable tbody tr:hover,
 table.dataTable.hover tbody tr:hover,
 table.dataTable.display tbody tr:hover { background-color: #375a7f !important; }
-table.dataTable tbody td { border-top: 1px solid #333 !important; }
+table.dataTable tbody tr:hover td,
+table.dataTable.hover tbody tr:hover td,
+table.dataTable.display tbody tr:hover td { color: #ffffff !important; }
 /* Selected cells — must stand out for the sig-test feature */
 table.dataTable tbody td.selected,
 table.dataTable tbody tr.selected {
