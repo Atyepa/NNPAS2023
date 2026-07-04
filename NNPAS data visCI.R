@@ -93,7 +93,56 @@ ui <- fluidPage(
   theme = shinytheme("darkly"),
   
   custom_styles(),  # Use the custom styles function
-  
+
+  # --- Dark-mode DataTables (matches shinytheme('darkly')) ---
+  tags$head(tags$style(HTML("
+.dataTables_wrapper,
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_processing,
+.dataTables_wrapper .dataTables_paginate { color: #eaeaea !important; }
+.dataTables_wrapper input[type='search'],
+.dataTables_wrapper input[type='number'],
+.dataTables_wrapper select {
+  background-color: #303030 !important; color: #eaeaea !important;
+  border: 1px solid #444 !important;
+}
+table.dataTable { background-color: transparent !important; color: #eaeaea !important; border-color: #444 !important; }
+table.dataTable thead th, table.dataTable thead td {
+  background-color: #2a2a2a !important; color: #ffffff !important;
+  border-bottom: 1px solid #444 !important;
+}
+table.dataTable tbody tr { background-color: #222 !important; }
+table.dataTable.stripe tbody tr.odd,
+table.dataTable.display tbody tr.odd { background-color: #262626 !important; }
+table.dataTable tbody tr:hover,
+table.dataTable.hover tbody tr:hover,
+table.dataTable.display tbody tr:hover { background-color: #375a7f !important; }
+table.dataTable tbody td { border-top: 1px solid #333 !important; }
+/* Selected cells — must stand out for the sig-test feature */
+table.dataTable tbody td.selected,
+table.dataTable tbody tr.selected {
+  background-color: #00bc8c !important; color: #000 !important;
+}
+/* Pagination */
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  color: #eaeaea !important; background: transparent !important;
+  border: 1px solid #444 !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: #375a7f !important; color: #ffffff !important;
+  border: 1px solid #444 !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+  background: #00bc8c !important; color: #000 !important;
+  border: 1px solid #00bc8c !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+.dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover { color: #666 !important; }
+"))),
+
   headerPanel("NNPAS 2023 Data cube visualisation"),
   
   sidebarPanel(
