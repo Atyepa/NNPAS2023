@@ -449,13 +449,31 @@ ausnut_label_rank <- reactive({
     mutate(rk = row_number())
 })
 
-# 3) Keep the slider's MAX in step with the food count, but PRESERVE the
-#    user's chosen window across selection changes — only clamp it into
-#    1..n when the number of foods shrinks below the current window.
+# 3) Keep the slider's MAX in step with the food count.
+#    Behaviour:
+#      - When the base has 0 or 1 foods (e.g. Class1 = "Major" with a single
+#        picker choice), the rank slider is meaningless — reset it to a wide
+#        default so it doesn't LOOK collapsed and doesn't filter anything out.
+#        Also reset the "opened" flag so the next multi-food selection re-opens.
+#      - First non-degenerate firing (n > 1): open the window WIDE = c(1, n).
+#      - Subsequent firings: PRESERVE the user's chosen window and only clamp
+#        into 1..n when the number of foods shrinks below their window.
+rank_slider_opened <- reactiveVal(FALSE)
 observeEvent(ausnut_label_rank(), {
-  n   <- max(nrow(ausnut_label_rank()), 1)
+  n <- nrow(ausnut_label_rank())
+  if (n <= 1) {
+    rank_slider_opened(FALSE)
+    wide <- max(n, 30)
+    updateSliderInput(session, "rankRange", max = wide, value = c(1, wide))
+    return()
+  }
+  if (!rank_slider_opened()) {
+    updateSliderInput(session, "rankRange", max = n, value = c(1, n))
+    rank_slider_opened(TRUE)
+    return()
+  }
   cur <- input$rankRange
-  if (is.null(cur)) cur <- c(1, n)          # first load: full range
+  if (is.null(cur)) cur <- c(1, n)          # defensive fallback
   lo  <- min(max(cur[1], 1), n)             # clamp window into 1..n
   hi  <- min(max(cur[2], lo), n)
   updateSliderInput(session, "rankRange", max = n, value = c(lo, hi))
